@@ -1248,3 +1248,102 @@ button {
   background-color: rgba(59, 130, 246, 0.15) !important;
   box-shadow: inset 0 0 0 1px var(--accent-color) !important;
 }
+
+/* Mobile responsive styles */
+.mobile-only-btn {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-only-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .app-container {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .sidebar,
+  .notes-list-panel,
+  .editor-panel {
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    border-right: none !important;
+  }
+  
+  /* Reset collapsed sidebar behavior on mobile */
+  .sidebar.collapsed {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+  
+  /* Position panes off-screen depending on view */
+  .app-container.view-sidebar .sidebar {
+    transform: translateX(0);
+  }
+  .app-container.view-sidebar .notes-list-panel {
+    transform: translateX(100%);
+  }
+  .app-container.view-sidebar .editor-panel {
+    transform: translateX(200%);
+  }
+  
+  .app-container.view-list .sidebar {
+    transform: translateX(-100%);
+  }
+  .app-container.view-list .notes-list-panel {
+    transform: translateX(0);
+  }
+  .app-container.view-list .editor-panel {
+    transform: translateX(100%);
+  }
+  
+  .app-container.view-editor .sidebar {
+    transform: translateX(-200%);
+  }
+  .app-container.view-editor .notes-list-panel {
+    transform: translateX(-100%);
+  }
+  .app-container.view-editor .editor-panel {
+    transform: translateX(0);
+  }
+  
+  /* Tweak padding and sizes for mobile touch devices */
+  .editor-textarea {
+    padding: 16px 20px !important;
+  }
+  
+  .editor-header {
+    padding: 10px 16px !important;
+  }
+  
+  .editor-toolbar {
+    padding: 8px 12px !important;
+    overflow-x: auto;
+    white-space: nowrap;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  
+  /* Make sure editor-toolbar scrollbar is hidden */
+  .editor-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .editor-toolbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

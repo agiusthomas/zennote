@@ -96,6 +96,9 @@ export default function App() {
   const [activeFilter, setActiveFilter] = useState({ type: 'all' });
   const [activeNoteId, setActiveNoteId] = useState('n-welcome');
 
+  // Mobile navigation state: 'sidebar' | 'list' | 'editor'
+  const [mobileView, setMobileView] = useState('list');
+
   // Modal states
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [folderModal, setFolderModal] = useState({
@@ -110,6 +113,19 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // Mobile responsive view controllers
+  useEffect(() => {
+    setMobileView('list');
+  }, [activeFilter]);
+
+  useEffect(() => {
+    if (activeNoteId) {
+      setMobileView('editor');
+    } else {
+      setMobileView('list');
+    }
+  }, [activeNoteId]);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -263,7 +279,7 @@ export default function App() {
   const activeNote = notes.find(n => n.id === activeNoteId);
 
   return (
-    <div className="app-container">
+    <div className={`app-container view-${mobileView}`}>
       {/* 1. Sidebar Pane */}
       <Sidebar
         folders={folders}
@@ -286,6 +302,7 @@ export default function App() {
         activeNoteId={activeNoteId}
         onSelectNote={setActiveNoteId}
         onCreateNote={handleCreateNote}
+        onBackToSidebar={() => setMobileView('sidebar')}
       />
 
       {/* 3. Editor Pane */}
@@ -296,6 +313,7 @@ export default function App() {
         onRestoreNote={handleRestoreNote}
         onDeleteNoteForever={handleDeleteNoteForever}
         onMoveNote={handleMoveNote}
+        onBackToList={() => setMobileView('list')}
       />
 
       {/* Folder CRUD Modal */}

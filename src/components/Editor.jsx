@@ -22,7 +22,8 @@ import {
   AlignRight,
   AlignJustify,
   Table,
-  Heading
+  Heading,
+  ChevronLeft
 } from 'lucide-react';
 import { getFolderBreadcrumbs } from '../utils/helpers';
 import EmojiPicker from './EmojiPicker';
@@ -33,7 +34,8 @@ export default function Editor({
   onUpdateNote,
   onRestoreNote,
   onDeleteNoteForever,
-  onMoveNote
+  onMoveNote,
+  onBackToList
 }) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
@@ -221,7 +223,15 @@ export default function Editor({
 
   if (!note) {
     return (
-      <div className="editor-panel empty-state">
+      <div className="editor-panel empty-state" style={{ position: 'relative' }}>
+        <button 
+          className="icon-btn mobile-only-btn" 
+          onClick={onBackToList}
+          title="Back to notes list"
+          style={{ position: 'absolute', top: '16px', left: '16px', padding: '6px' }}
+        >
+          <ChevronLeft size={18} />
+        </button>
         <FileText size={64} className="empty-state-icon" />
         <h2 style={{ fontFamily: 'var(--font-title)', fontSize: '24px', marginBottom: '8px' }}>
           Welcome to ZenNote
@@ -989,6 +999,14 @@ export default function Editor({
 
       {/* Editor Header */}
       <div className="editor-header">
+        <button 
+          className="icon-btn mobile-only-btn" 
+          onClick={onBackToList}
+          title="Back to notes list"
+          style={{ marginRight: '8px', padding: '4px' }}
+        >
+          <ChevronLeft size={18} />
+        </button>
         {/* Breadcrumbs */}
         <div className="editor-breadcrumbs">
           <Folder size={12} />

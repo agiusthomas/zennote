@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, ArrowUpDown, Star, Trash, Archive } from 'lucide-react';
+import { Plus, Search, ArrowUpDown, Star, Trash, Archive, Menu } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
 
 export default function NotesList({
@@ -8,7 +8,8 @@ export default function NotesList({
   activeFilter,
   activeNoteId,
   onSelectNote,
-  onCreateNote
+  onCreateNote,
+  onBackToSidebar
 }) {
   const [localSearch, setLocalSearch] = useState('');
   const [sortBy, setSortBy] = useState('updatedAt'); // 'updatedAt' | 'createdAt' | 'title'
@@ -104,6 +105,14 @@ export default function NotesList({
       <div className="notes-list-header">
         <div className="notes-list-title-area">
           <div className="flex-row" style={{ gap: '8px' }}>
+            <button 
+              className="icon-btn mobile-only-btn" 
+              onClick={onBackToSidebar} 
+              title="Show Folders"
+              style={{ marginRight: '4px' }}
+            >
+              <Menu size={18} />
+            </button>
             {headerInfo.icon}
             <h2 style={{ fontSize: '20px' }}>{headerInfo.title}</h2>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '10px' }}>
