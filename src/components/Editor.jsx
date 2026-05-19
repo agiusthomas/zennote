@@ -51,6 +51,7 @@ export default function Editor({
 
   // Table editing states
   const [activeCell, setActiveCell] = useState(null);
+  const [anchorCell, setAnchorCell] = useState(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
 
@@ -120,6 +121,7 @@ export default function Editor({
       // Dismiss active cell if clicked outside table, context menu or plus button
       if (!e.target.closest('table') && !e.target.closest('.table-edge-plus') && !e.target.closest('.table-context-menu')) {
         setActiveCell(null);
+        setAnchorCell(null);
         document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
       }
     };
@@ -132,12 +134,17 @@ export default function Editor({
   // Listen for selection changes to set active table cell
   useEffect(() => {
     const handleSelectionChange = () => {
+      // If we have selected cells with class, don't override activeCell with null
+      const hasClassSelection = editorRef.current?.querySelector('.cell-selected');
+      if (hasClassSelection) return;
+
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0 && editorRef.current) {
         let node = selection.getRangeAt(0).startContainer;
         while (node && node !== editorRef.current) {
           if (node.nodeType === 1 && (node.tagName === 'TD' || node.tagName === 'TH')) {
             setActiveCell(node);
+            setAnchorCell(node);
             return;
           }
           node = node.parentNode;
@@ -146,6 +153,7 @@ export default function Editor({
       const activeEl = document.activeElement;
       if (activeEl && !activeEl.closest('td, th') && !activeEl.closest('.table-edge-plus') && !activeEl.closest('.table-context-menu')) {
         setActiveCell(null);
+        setAnchorCell(null);
       }
     };
 
@@ -424,6 +432,23 @@ export default function Editor({
 
   // Keyboard Shortcuts for Formats: ⌥⌘[1-4, 0] (or Alt+Ctrl+[1-4, 0])
   const handleKeyDown = (e) => {
+    // Delete/Backspace support for selected table cell contents
+    if ((e.key === 'Backspace' || e.key === 'Delete') && activeCell) {
+      const table = activeCell.closest('table');
+      if (table) {
+        const selectedClassCells = Array.from(table.querySelectorAll('.cell-selected'));
+        // Only clear cells if multiple cells are selected
+        if (selectedClassCells.length > 1) {
+          e.preventDefault();
+          selectedClassCells.forEach(cell => {
+            cell.innerHTML = '<br>';
+          });
+          handleContentChange();
+          return;
+        }
+      }
+    }
+
     if ((e.metaKey || e.ctrlKey) && e.altKey) {
       if (e.key === '1') {
         e.preventDefault();
@@ -468,14 +493,16 @@ export default function Editor({
     setBlockType('p');
   };
 
-  // Editor Click Listener (handles image popup opening and cell selections)
-  const handleEditorClick = (e) => {
+  // Custom mouse down logic for grid cell selection
+  const handleEditorMouseDown = (e) => {
     const cell = e.target.closest('td, th');
     if (cell && editorRef.current.contains(cell)) {
       const table = cell.closest('table');
       if (table) {
-        if (e.shiftKey && activeCell && activeCell.closest('table') === table) {
+        if (e.shiftKey && anchorCell && anchorCell.closest('table') === table) {
+          // Shift click: select range from anchorCell to clicked cell
           e.preventDefault();
+          
           const rows = Array.from(table.querySelectorAll('tr'));
           let anchorRowIdx = -1;
           let anchorColIdx = -1;
@@ -484,7 +511,7 @@ export default function Editor({
           
           rows.forEach((tr, rIdx) => {
             const cells = Array.from(tr.children);
-            const aIdx = cells.indexOf(activeCell);
+            const aIdx = cells.indexOf(anchorCell);
             const tIdx = cells.indexOf(cell);
             if (aIdx !== -1) {
               anchorRowIdx = rIdx;
@@ -515,11 +542,15 @@ export default function Editor({
               }
             }
             
+            setActiveCell(cell);
             window.getSelection()?.removeAllRanges();
           }
         } else {
-          // Clear previous highlights
+          // Normal click: set both anchorCell and activeCell
           table.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+          cell.classList.add('cell-selected');
+          
+          setAnchorCell(cell);
           setActiveCell(cell);
         }
       }
@@ -527,7 +558,10 @@ export default function Editor({
       // Clear cell highlights if clicked outside table
       editorRef.current?.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
     }
+  };
 
+  // Editor Click Listener (handles image popup opening)
+  const handleEditorClick = (e) => {
     if (e.target.tagName === 'IMG') {
       const img = e.target;
       setSelectedImage(img);
@@ -810,6 +844,63 @@ export default function Editor({
       setShowContextMenu(true);
     } else {
       setShowContextMenu(false);
+    }
+  };
+
+  // Custom copy handler to construct tabular representation for range selection
+  const handleCopy = (e) => {
+    if (!activeCell) return;
+    const table = activeCell.closest('table');
+    if (!table) return;
+    
+    const selectedClassCells = Array.from(table.querySelectorAll('.cell-selected'));
+    // Only intercept if we have multiple cells selected
+    if (selectedClassCells.length > 1) {
+      e.preventDefault();
+      
+      const rows = Array.from(table.querySelectorAll('tr'));
+      let minR = rows.length, maxR = -1;
+      let minC = 1000, maxC = -1;
+      
+      rows.forEach((tr, rIdx) => {
+        Array.from(tr.children).forEach((cell, cIdx) => {
+          if (cell.classList.contains('cell-selected')) {
+            minR = Math.min(minR, rIdx);
+            maxR = Math.max(maxR, rIdx);
+            minC = Math.min(minC, cIdx);
+            maxC = Math.max(maxC, cIdx);
+          }
+        });
+      });
+      
+      if (maxR !== -1) {
+        let textOutput = '';
+        let htmlOutput = '<table>';
+        
+        for (let r = minR; r <= maxR; r++) {
+          let rowText = [];
+          htmlOutput += '<tr>';
+          const tr = rows[r];
+          
+          for (let c = minC; c <= maxC; c++) {
+            const cell = tr?.children[c];
+            if (cell && cell.classList.contains('cell-selected')) {
+              rowText.push(cell.innerText || cell.textContent || '');
+              const tag = cell.tagName.toLowerCase();
+              htmlOutput += `<${tag}>${cell.innerHTML}</${tag}>`;
+            } else {
+              rowText.push('');
+              htmlOutput += '<td></td>';
+            }
+          }
+          textOutput += rowText.join('\t') + '\n';
+          htmlOutput += '</tr>';
+        }
+        htmlOutput += '</table>';
+        
+        e.clipboardData.setData('text/plain', textOutput.trimEnd());
+        e.clipboardData.setData('text/html', htmlOutput);
+      }
     }
   };
 
@@ -1417,8 +1508,10 @@ export default function Editor({
             onBlur={handleContentChange}
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
+            onMouseDown={handleEditorMouseDown}
             onClick={handleEditorClick}
             onContextMenu={handleContextMenu}
+            onCopy={handleCopy}
             onMouseUp={() => {
               updateBlockType();
             }}
