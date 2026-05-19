@@ -495,10 +495,25 @@ export default function Editor({
 
   // Custom mouse down logic for grid cell selection
   const handleEditorMouseDown = (e) => {
+    const isRightClick = e.button === 2 || (e.button === 0 && e.ctrlKey);
     const cell = e.target.closest('td, th');
+    
     if (cell && editorRef.current.contains(cell)) {
       const table = cell.closest('table');
       if (table) {
+        if (isRightClick) {
+          // If it's a right click and the cell is already part of the selected block, do nothing
+          if (cell.classList.contains('cell-selected')) {
+            return;
+          }
+          // If it's a right click on an unselected cell, select only this cell
+          table.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+          cell.classList.add('cell-selected');
+          setAnchorCell(cell);
+          setActiveCell(cell);
+          return;
+        }
+
         if (e.shiftKey && anchorCell && anchorCell.closest('table') === table) {
           // Shift click: select range from anchorCell to clicked cell
           e.preventDefault();
