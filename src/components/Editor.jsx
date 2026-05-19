@@ -20,7 +20,8 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
-  AlignJustify
+  AlignJustify,
+  Table
 } from 'lucide-react';
 import { getFolderBreadcrumbs } from '../utils/helpers';
 import EmojiPicker from './EmojiPicker';
@@ -42,6 +43,10 @@ export default function Editor({
   const [showBorderControls, setShowBorderControls] = useState(false);
   const [lastBorderWidth, setLastBorderWidth] = useState('2px');
   const [lastBorderColor, setLastBorderColor] = useState('var(--border-color)');
+
+  // Table creator state variables
+  const [showTableCreator, setShowTableCreator] = useState(false);
+  const [gridHover, setGridHover] = useState({ rows: 0, cols: 0 });
 
   // Drag resizing states
   const [isDragging, setIsDragging] = useState(false);
@@ -89,13 +94,16 @@ export default function Editor({
     };
   }, [note?.id]);
 
-  // Global click listener to dismiss image popup
+  // Global click listener to dismiss image popup and table creator
   useEffect(() => {
     const handleGlobalClick = (e) => {
       const wrapper = editorRef.current?.parentNode;
       if (wrapper && !wrapper.contains(e.target) && !e.target.closest('.image-context-popup')) {
         setSelectedImage(null);
         setShowBorderControls(false);
+      }
+      if (!e.target.closest('.table-creator-popover') && !e.target.closest('.table-creator-trigger')) {
+        setShowTableCreator(false);
       }
     };
     document.addEventListener('click', handleGlobalClick);
@@ -285,6 +293,7 @@ export default function Editor({
   };
 
   const handlePaste = (e) => {
+    // Intercept image files first
     const items = e.clipboardData?.items;
     if (items) {
       for (let i = 0; i < items.length; i++) {
@@ -293,8 +302,79 @@ export default function Editor({
           const file = items[i].getAsFile();
           if (file) {
             insertImageFile(file);
+            return;
           }
         }
+      }
+    }
+
+    // Intercept HTML pastes for tables
+    const htmlData = e.clipboardData?.getData('text/html');
+    const plainText = e.clipboardData?.getData('text/plain');
+
+    if (htmlData && htmlData.includes('<table')) {
+      e.preventDefault();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlData, 'text/html');
+      const tables = doc.querySelectorAll('table');
+      
+      if (tables.length > 0) {
+        tables.forEach((table) => {
+          table.removeAttribute('style');
+          table.removeAttribute('border');
+          table.removeAttribute('cellspacing');
+          table.removeAttribute('cellpadding');
+          table.removeAttribute('width');
+          table.removeAttribute('height');
+          
+          table.querySelectorAll('tr, th, td').forEach((cell) => {
+            cell.removeAttribute('style');
+            cell.removeAttribute('class');
+            cell.removeAttribute('width');
+            cell.removeAttribute('height');
+            
+            // Clean up font tags and spans inside headers/cells
+            cell.querySelectorAll('font, span, style').forEach((n) => {
+              const parent = n.parentNode;
+              while (n.firstChild) {
+                parent.insertBefore(n.firstChild, n);
+              }
+              parent.removeChild(n);
+            });
+          });
+        });
+
+        const cleanHtml = Array.from(tables).map(t => t.outerHTML).join('<p><br></p>');
+        document.execCommand('insertHTML', false, cleanHtml + '<p><br></p>');
+        handleContentChange();
+        return;
+      }
+    }
+
+    // Intercept plain text TSV pastes from spreadsheets (contains tabs and newlines)
+    if (plainText && plainText.includes('\t') && plainText.includes('\n')) {
+      e.preventDefault();
+      const rows = plainText.split('\n').map(line => line.split('\t'));
+      const validRows = rows.filter(r => r.some(cell => cell.trim() !== ''));
+      
+      if (validRows.length > 0) {
+        let tableHtml = '<table>';
+        validRows.forEach((row, rIndex) => {
+          tableHtml += '<tr>';
+          row.forEach(cellText => {
+            const cleanText = cellText.replace(/\r/g, '').trim();
+            if (rIndex === 0) {
+              tableHtml += `<th>${cleanText || 'Header'}</th>`;
+            } else {
+              tableHtml += `<td>${cleanText}</td>`;
+            }
+          });
+          tableHtml += '</tr>';
+        });
+        tableHtml += '</table><p><br></p>';
+        document.execCommand('insertHTML', false, tableHtml);
+        handleContentChange();
+        return;
       }
     }
   };
@@ -402,6 +482,58 @@ export default function Editor({
   let handleRight = 0;
   let handleTop = 0;
   let handleHeight = 0;
+
+  // Insert custom table element
+  const insertTable = (rows, cols) => {
+    let tableHtml = '<table>';
+    for (let r = 0; r < rows; r++) {
+      tableHtml += '<tr>';
+      for (let c = 0; c < cols; c++) {
+        if (r === 0) {
+          tableHtml += '<th>Header</th>';
+        } else {
+          tableHtml += '<td>Cell</td>';
+        }
+      }
+      tableHtml += '</tr>';
+    }
+    tableHtml += '</table><p><br></p>';
+
+    if (document.activeElement !== editorRef.current) {
+      editorRef.current.focus();
+    }
+
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (editorRef.current.contains(range.startContainer)) {
+        range.deleteContents();
+        const el = document.createElement('div');
+        el.innerHTML = tableHtml;
+        const fragment = document.createDocumentFragment();
+        let node;
+        let lastNode;
+        while ((node = el.firstChild)) {
+          lastNode = fragment.appendChild(node);
+        }
+        range.insertNode(fragment);
+        
+        if (lastNode) {
+          range.setStartAfter(lastNode);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      } else {
+        editorRef.current.innerHTML += tableHtml;
+      }
+    } else {
+      editorRef.current.innerHTML += tableHtml;
+    }
+    
+    setShowTableCreator(false);
+    handleContentChange();
+  };
 
   if (selectedImage && editorRef.current) {
     const rect = selectedImage.getBoundingClientRect();
@@ -654,6 +786,76 @@ export default function Editor({
             <button className="icon-btn" title="Upload Image" onClick={() => imageInputRef.current?.click()}>
               <ImageIcon size={16} />
             </button>
+
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button 
+                className={`icon-btn table-creator-trigger ${showTableCreator ? 'active' : ''}`} 
+                title="Insert Table" 
+                onClick={() => setShowTableCreator(!showTableCreator)}
+              >
+                <Table size={16} />
+              </button>
+              
+              {showTableCreator && (
+                <div 
+                  className="table-creator-popover" 
+                  style={{
+                    position: 'absolute',
+                    top: '32px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 100,
+                    backgroundColor: 'var(--bg-primary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    boxShadow: 'var(--shadow-lg)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    width: '180px'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ fontSize: '11px', fontWeight: '600', display: 'flex', justifyContent: 'space-between', color: 'var(--text-primary)' }}>
+                    <span>Table Size</span>
+                    <span style={{ color: 'var(--accent-color)' }}>
+                      {gridHover.rows} × {gridHover.cols}
+                    </span>
+                  </div>
+                  <div 
+                    style={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: 'repeat(8, 1fr)', 
+                      gap: '4px' 
+                    }}
+                    onMouseLeave={() => setGridHover({ rows: 0, cols: 0 })}
+                  >
+                    {Array.from({ length: 8 }).map((_, r) => (
+                      Array.from({ length: 8 }).map((_, c) => {
+                        const isActive = r < gridHover.rows && c < gridHover.cols;
+                        return (
+                          <div
+                            key={`${r}-${c}`}
+                            onMouseEnter={() => setGridHover({ rows: r + 1, cols: c + 1 })}
+                            onClick={() => insertTable(r + 1, c + 1)}
+                            style={{
+                              width: '14px',
+                              height: '14px',
+                              borderRadius: '2px',
+                              border: isActive ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
+                              backgroundColor: isActive ? 'var(--accent-color)' : 'transparent',
+                              cursor: 'pointer',
+                              transition: 'all 0.05s ease'
+                            }}
+                          />
+                        );
+                      })
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
