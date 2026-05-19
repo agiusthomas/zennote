@@ -1179,3 +1179,65 @@ button {
   from { transform: translateY(100%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* Table floating edge plus buttons */
+.table-edge-plus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: var(--accent-color);
+  color: white;
+  border: 1px solid var(--bg-primary);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast) ease;
+}
+
+.table-edge-plus:hover {
+  background-color: var(--accent-hover);
+  transform: translate(-50%, -50%) scale(1.15) !important;
+}
+
+/* Table context menu styles */
+.table-context-menu {
+  position: fixed;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  animation: fadeIn 0.1s ease-out;
+}
+
+.table-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.table-context-menu-item:hover {
+  background-color: rgba(120, 120, 120, 0.08);
+}
+
+.table-context-menu-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 4px 0;
+}

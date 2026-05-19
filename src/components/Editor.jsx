@@ -21,7 +21,8 @@ import {
   AlignCenter,
   AlignRight,
   AlignJustify,
-  Table
+  Table,
+  Heading
 } from 'lucide-react';
 import { getFolderBreadcrumbs } from '../utils/helpers';
 import EmojiPicker from './EmojiPicker';
@@ -47,6 +48,11 @@ export default function Editor({
   // Table creator state variables
   const [showTableCreator, setShowTableCreator] = useState(false);
   const [gridHover, setGridHover] = useState({ rows: 0, cols: 0 });
+
+  // Table editing states
+  const [activeCell, setActiveCell] = useState(null);
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
 
   // Drag resizing states
   const [isDragging, setIsDragging] = useState(false);
@@ -82,6 +88,8 @@ export default function Editor({
     const handleScroll = () => {
       setSelectedImage(null);
       setShowBorderControls(false);
+      setShowContextMenu(false);
+      setActiveCell(null);
     };
     const editor = editorRef.current;
     if (editor) {
@@ -94,7 +102,7 @@ export default function Editor({
     };
   }, [note?.id]);
 
-  // Global click listener to dismiss image popup and table creator
+  // Global click listener to dismiss image popup, context menu and table creator
   useEffect(() => {
     const handleGlobalClick = (e) => {
       const wrapper = editorRef.current?.parentNode;
@@ -105,10 +113,44 @@ export default function Editor({
       if (!e.target.closest('.table-creator-popover') && !e.target.closest('.table-creator-trigger')) {
         setShowTableCreator(false);
       }
+      
+      // Close context menu on any click
+      setShowContextMenu(false);
+      
+      // Dismiss active cell if clicked outside table, context menu or plus button
+      if (!e.target.closest('table') && !e.target.closest('.table-edge-plus') && !e.target.closest('.table-context-menu')) {
+        setActiveCell(null);
+      }
     };
     document.addEventListener('click', handleGlobalClick);
     return () => {
       document.removeEventListener('click', handleGlobalClick);
+    };
+  }, []);
+
+  // Listen for selection changes to set active table cell
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0 && editorRef.current) {
+        let node = selection.getRangeAt(0).startContainer;
+        while (node && node !== editorRef.current) {
+          if (node.nodeType === 1 && (node.tagName === 'TD' || node.tagName === 'TH')) {
+            setActiveCell(node);
+            return;
+          }
+          node = node.parentNode;
+        }
+      }
+      const activeEl = document.activeElement;
+      if (activeEl && !activeEl.closest('td, th') && !activeEl.closest('.table-edge-plus') && !activeEl.closest('.table-context-menu')) {
+        setActiveCell(null);
+      }
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
     };
   }, []);
 
@@ -535,6 +577,176 @@ export default function Editor({
     handleContentChange();
   };
 
+  // Get all selected cells for bulk operations
+  const getSelectedCells = () => {
+    const cells = [];
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !activeCell) return [activeCell];
+    
+    const range = selection.getRangeAt(0);
+    const table = activeCell.closest('table');
+    if (!table) return [activeCell];
+    
+    table.querySelectorAll('td, th').forEach((cell) => {
+      if (selection.containsNode(cell, true)) {
+        cells.push(cell);
+      }
+    });
+    
+    return cells.length > 0 ? cells : [activeCell];
+  };
+
+  // Insert row helper
+  const insertRow = (offset) => {
+    if (!activeCell) return;
+    const currentTr = activeCell.closest('tr');
+    const table = activeCell.closest('table');
+    if (!currentTr || !table) return;
+    
+    const newTr = document.createElement('tr');
+    const colCount = currentTr.children.length;
+    
+    for (let i = 0; i < colCount; i++) {
+      const cellType = currentTr.children[i].tagName.toLowerCase();
+      const newCell = document.createElement(cellType);
+      newCell.innerHTML = cellType === 'th' ? 'Header' : 'Cell';
+      newTr.appendChild(newCell);
+    }
+    
+    if (offset === -1) {
+      currentTr.parentNode.insertBefore(newTr, currentTr);
+    } else {
+      currentTr.parentNode.insertBefore(newTr, currentTr.nextSibling);
+    }
+    
+    handleContentChange();
+    setShowContextMenu(false);
+  };
+
+  // Insert column helper
+  const insertColumn = (offset) => {
+    if (!activeCell) return;
+    const table = activeCell.closest('table');
+    if (!table) return;
+    
+    const currentTr = activeCell.closest('tr');
+    if (!currentTr) return;
+    const colIndex = Array.from(currentTr.children).indexOf(activeCell);
+    if (colIndex === -1) return;
+    
+    table.querySelectorAll('tr').forEach(tr => {
+      const targetCell = tr.children[colIndex];
+      if (targetCell) {
+        const cellType = targetCell.tagName.toLowerCase();
+        const newCell = document.createElement(cellType);
+        newCell.innerHTML = cellType === 'th' ? 'Header' : 'Cell';
+        
+        if (offset === -1) {
+          tr.insertBefore(newCell, targetCell);
+        } else {
+          tr.insertBefore(newCell, targetCell.nextSibling);
+        }
+      }
+    });
+    
+    handleContentChange();
+    setShowContextMenu(false);
+  };
+
+  // Delete selected rows (bulk)
+  const deleteSelectedRows = () => {
+    if (!activeCell) return;
+    const cells = getSelectedCells();
+    const rowsToDelete = new Set(cells.map(c => c.closest('tr')).filter(Boolean));
+    const table = activeCell.closest('table');
+    
+    if (table) {
+      rowsToDelete.forEach(tr => {
+        tr.remove();
+      });
+      
+      if (table.querySelectorAll('tr').length === 0) {
+        table.remove();
+      }
+      
+      handleContentChange();
+    }
+    setShowContextMenu(false);
+    setActiveCell(null);
+  };
+
+  // Delete selected columns (bulk)
+  const deleteSelectedColumns = () => {
+    if (!activeCell) return;
+    const cells = getSelectedCells();
+    const table = activeCell.closest('table');
+    if (!table) return;
+    
+    const colIndices = new Set();
+    cells.forEach(cell => {
+      const tr = cell.closest('tr');
+      if (tr) {
+        const index = Array.from(tr.children).indexOf(cell);
+        if (index !== -1) colIndices.add(index);
+      }
+    });
+    
+    const sortedIndices = Array.from(colIndices).sort((a, b) => b - a);
+    
+    table.querySelectorAll('tr').forEach(tr => {
+      sortedIndices.forEach(idx => {
+        if (tr.children[idx]) {
+          tr.children[idx].remove();
+        }
+      });
+    });
+    
+    const firstTr = table.querySelector('tr');
+    if (!firstTr || firstTr.children.length === 0) {
+      table.remove();
+    }
+    
+    handleContentChange();
+    setShowContextMenu(false);
+    setActiveCell(null);
+  };
+
+  // Toggle header row
+  const toggleHeaderRow = () => {
+    if (!activeCell) return;
+    const table = activeCell.closest('table');
+    if (!table) return;
+    
+    const firstTr = table.querySelector('tr');
+    if (!firstTr) return;
+    
+    const cells = Array.from(firstTr.children);
+    const isCurrentlyHeader = cells[0].tagName.toLowerCase() === 'th';
+    const newTag = isCurrentlyHeader ? 'td' : 'th';
+    
+    cells.forEach(cell => {
+      const newCell = document.createElement(newTag);
+      newCell.innerHTML = cell.innerHTML;
+      firstTr.replaceChild(newCell, cell);
+    });
+    
+    handleContentChange();
+    setShowContextMenu(false);
+    setActiveCell(null);
+  };
+
+  const handleContextMenu = (e) => {
+    const cell = e.target.closest('td, th');
+    if (cell && editorRef.current.contains(cell)) {
+      e.preventDefault();
+      setActiveCell(cell);
+      setContextMenuPos({ x: e.clientX, y: e.clientY });
+      setShowContextMenu(true);
+    } else {
+      setShowContextMenu(false);
+    }
+  };
+
   if (selectedImage && editorRef.current) {
     const rect = selectedImage.getBoundingClientRect();
     const wrapper = editorRef.current.parentNode.getBoundingClientRect();
@@ -543,6 +755,25 @@ export default function Editor({
     handleLeft = rect.left - wrapper.left;
     handleRight = rect.right - wrapper.left;
     handleHeight = rect.height;
+  }
+
+  // Calculate coordinates for table plus icons
+  let rowPlusPos = { top: 0, left: 0 };
+  let colPlusPos = { top: 0, left: 0 };
+  
+  if (activeCell && editorRef.current) {
+    const rect = activeCell.getBoundingClientRect();
+    const wrapper = editorRef.current.parentNode.getBoundingClientRect();
+    
+    rowPlusPos = {
+      top: rect.bottom - wrapper.top,
+      left: rect.left - wrapper.left + rect.width / 2
+    };
+    
+    colPlusPos = {
+      top: rect.top - wrapper.top + rect.height / 2,
+      left: rect.right - wrapper.left
+    };
   }
 
   return (
@@ -889,6 +1120,53 @@ export default function Editor({
             </>
           )}
 
+          {/* Table Hover Edge Plus Buttons */}
+          {activeCell && !note.isTrash && (
+            <>
+              {/* Row insertion plus button */}
+              <button
+                className="table-edge-plus"
+                style={{
+                  position: 'absolute',
+                  top: `${rowPlusPos.top}px`,
+                  left: `${rowPlusPos.left}px`,
+                  transform: 'translate(-50%, -50%)',
+                  zIndex: 15
+                }}
+                onClick={() => insertRow(1)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  insertRow(-1);
+                }}
+                title="Click: Add row below | Right-click: Add row above"
+              >
+                <Plus size={10} />
+              </button>
+
+              {/* Column insertion plus button */}
+              <button
+                className="table-edge-plus"
+                style={{
+                  position: 'absolute',
+                  top: `${colPlusPos.top}px`,
+                  left: `${colPlusPos.left}px`,
+                  transform: 'translate(-50%, -50%)',
+                  zIndex: 15
+                }}
+                onClick={() => insertColumn(1)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  insertColumn(-1);
+                }}
+                title="Click: Add col to right | Right-click: Add col to left"
+              >
+                <Plus size={10} />
+              </button>
+            </>
+          )}
+
           {/* Floating Image Editor Toolbar */}
           {selectedImage && (
             <div 
@@ -1074,12 +1352,60 @@ export default function Editor({
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
             onClick={handleEditorClick}
+            onContextMenu={handleContextMenu}
             onMouseUp={() => {
               updateBlockType();
             }}
             onKeyUp={updateBlockType}
             placeholder="Start typing your note here..."
           />
+
+          {/* Table Context Menu */}
+          {showContextMenu && activeCell && (
+            <div 
+              className="table-context-menu"
+              style={{
+                top: `${contextMenuPos.y}px`,
+                left: `${contextMenuPos.x}px`
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button className="table-context-menu-item" onClick={() => insertRow(-1)}>
+                <Plus size={14} /> Insert Row Above
+              </button>
+              <button className="table-context-menu-item" onClick={() => insertRow(1)}>
+                <Plus size={14} /> Insert Row Below
+              </button>
+              <div className="table-context-menu-divider" />
+              <button className="table-context-menu-item" onClick={() => insertColumn(-1)}>
+                <Plus size={14} /> Insert Column Left
+              </button>
+              <button className="table-context-menu-item" onClick={() => insertColumn(1)}>
+                <Plus size={14} /> Insert Column Right
+              </button>
+              <div className="table-context-menu-divider" />
+              <button className="table-context-menu-item" onClick={toggleHeaderRow}>
+                <Heading size={14} /> Toggle Header Row
+              </button>
+              <div className="table-context-menu-divider" />
+              <button className="table-context-menu-item" style={{ color: '#ef4444' }} onClick={deleteSelectedRows}>
+                <Trash size={14} /> Delete Selected Row(s)
+              </button>
+              <button className="table-context-menu-item" style={{ color: '#ef4444' }} onClick={deleteSelectedColumns}>
+                <Trash size={14} /> Delete Selected Column(s)
+              </button>
+              <div className="table-context-menu-divider" />
+              <button className="table-context-menu-item" style={{ color: '#ef4444' }} onClick={() => {
+                const table = activeCell.closest('table');
+                if (table) table.remove();
+                setActiveCell(null);
+                setShowContextMenu(false);
+                handleContentChange();
+              }}>
+                <Trash size={14} /> Delete Table
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
