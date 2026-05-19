@@ -120,6 +120,7 @@ export default function Editor({
       // Dismiss active cell if clicked outside table, context menu or plus button
       if (!e.target.closest('table') && !e.target.closest('.table-edge-plus') && !e.target.closest('.table-context-menu')) {
         setActiveCell(null);
+        document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
       }
     };
     document.addEventListener('click', handleGlobalClick);
@@ -467,8 +468,66 @@ export default function Editor({
     setBlockType('p');
   };
 
-  // Editor Click Listener (handles image popup opening)
+  // Editor Click Listener (handles image popup opening and cell selections)
   const handleEditorClick = (e) => {
+    const cell = e.target.closest('td, th');
+    if (cell && editorRef.current.contains(cell)) {
+      const table = cell.closest('table');
+      if (table) {
+        if (e.shiftKey && activeCell && activeCell.closest('table') === table) {
+          e.preventDefault();
+          const rows = Array.from(table.querySelectorAll('tr'));
+          let anchorRowIdx = -1;
+          let anchorColIdx = -1;
+          let targetRowIdx = -1;
+          let targetColIdx = -1;
+          
+          rows.forEach((tr, rIdx) => {
+            const cells = Array.from(tr.children);
+            const aIdx = cells.indexOf(activeCell);
+            const tIdx = cells.indexOf(cell);
+            if (aIdx !== -1) {
+              anchorRowIdx = rIdx;
+              anchorColIdx = aIdx;
+            }
+            if (tIdx !== -1) {
+              targetRowIdx = rIdx;
+              targetColIdx = tIdx;
+            }
+          });
+          
+          if (anchorRowIdx !== -1 && targetRowIdx !== -1) {
+            table.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+            const minRow = Math.min(anchorRowIdx, targetRowIdx);
+            const maxRow = Math.max(anchorRowIdx, targetRowIdx);
+            const minCol = Math.min(anchorColIdx, targetColIdx);
+            const maxCol = Math.max(anchorColIdx, targetColIdx);
+            
+            for (let r = minRow; r <= maxRow; r++) {
+              const tr = rows[r];
+              if (tr) {
+                for (let c = minCol; c <= maxCol; c++) {
+                  const cellToSelect = tr.children[c];
+                  if (cellToSelect) {
+                    cellToSelect.classList.add('cell-selected');
+                  }
+                }
+              }
+            }
+            
+            window.getSelection()?.removeAllRanges();
+          }
+        } else {
+          // Clear previous highlights
+          table.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+          setActiveCell(cell);
+        }
+      }
+    } else {
+      // Clear cell highlights if clicked outside table
+      editorRef.current?.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+    }
+
     if (e.target.tagName === 'IMG') {
       const img = e.target;
       setSelectedImage(img);
@@ -579,13 +638,20 @@ export default function Editor({
 
   // Get all selected cells for bulk operations
   const getSelectedCells = () => {
-    const cells = [];
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || !activeCell) return [activeCell];
-    
-    const range = selection.getRangeAt(0);
+    if (!activeCell) return [];
     const table = activeCell.closest('table');
     if (!table) return [activeCell];
+    
+    // Check if there are cells with the custom selected class
+    const selectedClassCells = Array.from(table.querySelectorAll('.cell-selected'));
+    if (selectedClassCells.length > 0) {
+      return selectedClassCells;
+    }
+    
+    // Fall back to native selection
+    const cells = [];
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return [activeCell];
     
     table.querySelectorAll('td, th').forEach((cell) => {
       if (selection.containsNode(cell, true)) {
