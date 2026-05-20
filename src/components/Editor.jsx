@@ -523,7 +523,7 @@ export default function Editor({
         setSelectedImage(img);
         setIsDragging(true);
         setDragDirection(isNearLeft ? 'left' : 'right');
-        setDragStartWidth(img.clientWidth);
+        setDragStartWidth(rect.width);
         setDragStartMouseX(mouseX);
         // Hide popup while dragging to prevent overlap or visual clutter
         setShowBorderControls(false);
