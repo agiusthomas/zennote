@@ -167,10 +167,9 @@ export default function Editor({
     if (!selectedImage || !editorRef.current) return;
     const rect = selectedImage.getBoundingClientRect();
     const wrapper = editorRef.current.parentNode.getBoundingClientRect();
-    const scrollTop = editorRef.current.scrollTop;
     
     setImageOverlayPos({
-      top: rect.top - wrapper.top + scrollTop,
+      top: rect.top - wrapper.top,
       left: rect.left - wrapper.left,
       width: rect.width,
       height: rect.height
@@ -178,9 +177,9 @@ export default function Editor({
 
     // Also update the floating toolbar position
     const offset = 48;
-    let topPos = rect.top - wrapper.top + scrollTop - offset;
-    if (rect.top - wrapper.top < 55) {
-      topPos = rect.bottom - wrapper.top + scrollTop + 8;
+    let topPos = rect.top - wrapper.top - offset;
+    if (topPos < 55) {
+      topPos = rect.bottom - wrapper.top + 8;
     }
     setImagePopupPos({
       top: topPos,
@@ -531,10 +530,9 @@ export default function Editor({
       // Update overlay coordinates synchronously
       const rect = img.getBoundingClientRect();
       const wrapper = editorRef.current.parentNode.getBoundingClientRect();
-      const scrollTop = editorRef.current.scrollTop;
       
       setImageOverlayPos({
-        top: rect.top - wrapper.top + scrollTop,
+        top: rect.top - wrapper.top,
         left: rect.left - wrapper.left,
         width: rect.width,
         height: rect.height
@@ -542,9 +540,9 @@ export default function Editor({
 
       // Also update the floating toolbar position
       const offset = 48;
-      let topPos = rect.top - wrapper.top + scrollTop - offset;
-      if (rect.top - wrapper.top < 55) {
-        topPos = rect.bottom - wrapper.top + scrollTop + 8;
+      let topPos = rect.top - wrapper.top - offset;
+      if (topPos < 55) {
+        topPos = rect.bottom - wrapper.top + 8;
       }
       setImagePopupPos({
         top: topPos,

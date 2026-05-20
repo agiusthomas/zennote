@@ -690,7 +690,6 @@ button {
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
 }
 
 .wysiwyg-editor {
