@@ -167,19 +167,20 @@ export default function Editor({
     if (!selectedImage || !editorRef.current) return;
     const rect = selectedImage.getBoundingClientRect();
     const wrapper = editorRef.current.parentNode.getBoundingClientRect();
+    const scrollTop = editorRef.current.scrollTop;
     
     setImageOverlayPos({
-      top: rect.top - wrapper.top,
+      top: rect.top - wrapper.top + scrollTop,
       left: rect.left - wrapper.left,
       width: rect.width,
       height: rect.height
     });
 
-    // Also update the floating toolbar position!
+    // Also update the floating toolbar position
     const offset = 48;
-    let topPos = rect.top - wrapper.top - offset;
-    if (topPos < 55) {
-      topPos = rect.bottom - wrapper.top + 8;
+    let topPos = rect.top - wrapper.top + scrollTop - offset;
+    if (rect.top - wrapper.top < 55) {
+      topPos = rect.bottom - wrapper.top + scrollTop + 8;
     }
     setImagePopupPos({
       top: topPos,
@@ -530,9 +531,10 @@ export default function Editor({
       // Update overlay coordinates synchronously
       const rect = img.getBoundingClientRect();
       const wrapper = editorRef.current.parentNode.getBoundingClientRect();
+      const scrollTop = editorRef.current.scrollTop;
       
       setImageOverlayPos({
-        top: rect.top - wrapper.top,
+        top: rect.top - wrapper.top + scrollTop,
         left: rect.left - wrapper.left,
         width: rect.width,
         height: rect.height
@@ -540,9 +542,9 @@ export default function Editor({
 
       // Also update the floating toolbar position
       const offset = 48;
-      let topPos = rect.top - wrapper.top - offset;
-      if (topPos < 55) {
-        topPos = rect.bottom - wrapper.top + 8;
+      let topPos = rect.top - wrapper.top + scrollTop - offset;
+      if (rect.top - wrapper.top < 55) {
+        topPos = rect.bottom - wrapper.top + scrollTop + 8;
       }
       setImagePopupPos({
         top: topPos,
@@ -1357,7 +1359,60 @@ export default function Editor({
             </>
           )}
 
-          {/* Floating Image Editor Toolbar */}
+          <div
+            ref={editorRef}
+            className="wysiwyg-editor"
+            contentEditable={!note.isTrash}
+            onInput={handleContentChange}
+            onBlur={handleContentChange}
+            onPaste={handlePaste}
+            onKeyDown={handleKeyDown}
+            onMouseDown={handleEditorMouseDown}
+            onClick={handleEditorClick}
+            onContextMenu={handleContextMenu}
+            onCopy={handleCopy}
+            onMouseUp={() => {
+              updateBlockType();
+            }}
+            onKeyUp={updateBlockType}
+            placeholder="Start typing your note here..."
+          />
+
+          {/* Image Resize Overlay Handles — rendered AFTER editor so it paints on top */}
+          {selectedImage && (
+            <div 
+              className="image-resize-overlay"
+              style={{
+                position: 'absolute',
+                top: `${imageOverlayPos.top}px`,
+                left: `${imageOverlayPos.left}px`,
+                width: `${imageOverlayPos.width}px`,
+                height: `${imageOverlayPos.height}px`,
+                pointerEvents: 'none',
+                zIndex: 10
+              }}
+            >
+              <div className="image-resize-outline" />
+
+              {!note.isTrash && (
+                <div 
+                  className="image-resize-handle left-handle"
+                  style={{ pointerEvents: 'auto' }}
+                  onMouseDown={(e) => handleResizeMouseDown(e, 'left')}
+                />
+              )}
+
+              {!note.isTrash && (
+                <div 
+                  className="image-resize-handle right-handle"
+                  style={{ pointerEvents: 'auto' }}
+                  onMouseDown={(e) => handleResizeMouseDown(e, 'right')}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Floating Image Editor Toolbar — rendered AFTER editor so it paints on top */}
           {selectedImage && (
             <div 
               className="image-context-popup" 
@@ -1370,14 +1425,12 @@ export default function Editor({
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Border Toggle Icon Button */}
               <button 
                 className={`icon-btn ${selectedImage.style.borderWidth && selectedImage.style.borderWidth !== '0px' ? 'active' : ''}`}
                 onClick={() => {
                   const nextShow = !showBorderControls;
                   setShowBorderControls(nextShow);
                   if (nextShow) {
-                    // Apply last style automatically if it doesn't have a border yet
                     const hasBorder = selectedImage.style.borderWidth && selectedImage.style.borderWidth !== '0px';
                     if (!hasBorder) {
                       selectedImage.style.borderStyle = 'solid';
@@ -1386,6 +1439,8 @@ export default function Editor({
                       selectedImage.style.padding = '6px';
                       selectedImage.style.backgroundColor = 'var(--bg-secondary)';
                       handleContentChange();
+                      // Recalculate overlay after border changes layout
+                      setTimeout(() => updateImageOverlayPosition(), 0);
                     }
                   }
                 }}
@@ -1395,7 +1450,6 @@ export default function Editor({
                 <Square size={14} />
               </button>
 
-              {/* Inline Options (Size select & Color dots) shown on the right next to the border icon */}
               {showBorderControls && (
                 <div className="flex-row inline-border-options" style={{ gap: '6px', marginLeft: '6px', alignItems: 'center' }}>
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Size:</span>
@@ -1421,6 +1475,8 @@ export default function Editor({
                         setLastBorderWidth(width);
                       }
                       handleContentChange();
+                      // Recalculate overlay after border changes layout
+                      setTimeout(() => updateImageOverlayPosition(), 0);
                     }}
                     className="toolbar-select"
                     style={{ height: '22px', padding: '0 4px', fontSize: '11px' }}
@@ -1457,6 +1513,7 @@ export default function Editor({
                             selectedImage.style.borderColor = color.value;
                             setLastBorderColor(color.value);
                             handleContentChange();
+                            setTimeout(() => updateImageOverlayPosition(), 0);
                           }}
                           className="color-dot-btn"
                           style={{
@@ -1471,7 +1528,6 @@ export default function Editor({
                 </div>
               )}
               
-              {/* Image alignment options */}
               {!showBorderControls && (
                 <>
                   <div className="toolbar-divider" style={{ height: '14px', margin: '0 8px' }} />
@@ -1483,6 +1539,7 @@ export default function Editor({
                       selectedImage.style.marginLeft = '0px';
                       selectedImage.style.marginRight = 'auto';
                       handleContentChange();
+                      setTimeout(() => updateImageOverlayPosition(), 0);
                     }}
                     title="Align Left"
                     style={{ padding: '4px', height: '24px', width: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -1496,6 +1553,7 @@ export default function Editor({
                       selectedImage.style.marginLeft = 'auto';
                       selectedImage.style.marginRight = 'auto';
                       handleContentChange();
+                      setTimeout(() => updateImageOverlayPosition(), 0);
                     }}
                     title="Align Center"
                     style={{ padding: '4px', height: '24px', width: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -1509,6 +1567,7 @@ export default function Editor({
                       selectedImage.style.marginLeft = 'auto';
                       selectedImage.style.marginRight = '0px';
                       handleContentChange();
+                      setTimeout(() => updateImageOverlayPosition(), 0);
                     }}
                     title="Align Right"
                     style={{ padding: '4px', height: '24px', width: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -1517,9 +1576,7 @@ export default function Editor({
                   </button>
                 </>
               )}
-              
 
-              
               <button 
                 className="icon-btn" 
                 onClick={() => {
@@ -1535,62 +1592,6 @@ export default function Editor({
               </button>
             </div>
           )}
-
-          {/* Image Resize Overlay Handles */}
-          {selectedImage && (
-            <div 
-              className="image-resize-overlay"
-              style={{
-                position: 'absolute',
-                top: `${imageOverlayPos.top}px`,
-                left: `${imageOverlayPos.left}px`,
-                width: `${imageOverlayPos.width}px`,
-                height: `${imageOverlayPos.height}px`,
-                pointerEvents: 'none',
-                zIndex: 10
-              }}
-            >
-              {/* Highlight outline border */}
-              <div className="image-resize-outline" />
-
-              {/* Left Resize Handle */}
-              {!note.isTrash && (
-                <div 
-                  className="image-resize-handle left-handle"
-                  style={{ pointerEvents: 'auto' }}
-                  onMouseDown={(e) => handleResizeMouseDown(e, 'left')}
-                />
-              )}
-
-              {/* Right Resize Handle */}
-              {!note.isTrash && (
-                <div 
-                  className="image-resize-handle right-handle"
-                  style={{ pointerEvents: 'auto' }}
-                  onMouseDown={(e) => handleResizeMouseDown(e, 'right')}
-                />
-              )}
-            </div>
-          )}
-
-          <div
-            ref={editorRef}
-            className="wysiwyg-editor"
-            contentEditable={!note.isTrash}
-            onInput={handleContentChange}
-            onBlur={handleContentChange}
-            onPaste={handlePaste}
-            onKeyDown={handleKeyDown}
-            onMouseDown={handleEditorMouseDown}
-            onClick={handleEditorClick}
-            onContextMenu={handleContextMenu}
-            onCopy={handleCopy}
-            onMouseUp={() => {
-              updateBlockType();
-            }}
-            onKeyUp={updateBlockType}
-            placeholder="Start typing your note here..."
-          />
 
           {/* Table Context Menu */}
           {showContextMenu && activeCell && (
