@@ -56,6 +56,11 @@ export default function Editor({
   const [anchorCell, setAnchorCell] = useState(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
+  // Drag resizing states
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartWidth, setDragStartWidth] = useState(0);
+  const [dragStartMouseX, setDragStartMouseX] = useState(0);
+  const [dragDirection, setDragDirection] = useState('right'); // 'left' | 'right'
 
   const editorRef = useRef(null);
   const tagInputRef = useRef(null);
@@ -173,6 +178,50 @@ export default function Editor({
       window.removeEventListener('resize', handleResize);
     };
   }, []);
+
+  // Global Mouse Move and Mouse Up drag resizing handlers
+  useEffect(() => {
+    if (!isDragging || !selectedImage) return;
+
+    const handleMouseMove = (e) => {
+      const deltaX = e.clientX - dragStartMouseX;
+      let newWidth = dragStartWidth + (dragDirection === 'right' ? deltaX : -deltaX);
+      
+      // Keep width constraints between 60px and the editor boundaries
+      const editorWidth = editorRef.current.clientWidth - 80;
+      newWidth = Math.max(60, Math.min(newWidth, editorWidth));
+      
+      selectedImage.style.width = `${newWidth}px`;
+      selectedImage.style.height = 'auto'; // Preserves aspect ratio
+
+      // Recalculate popup position dynamically
+      const rect = selectedImage.getBoundingClientRect();
+      const wrapper = editorRef.current.parentNode.getBoundingClientRect();
+      
+      const offset = 48;
+      let topPos = rect.top - wrapper.top - offset;
+      if (topPos < 55) {
+        topPos = rect.bottom - wrapper.top + 8; // below image
+      }
+
+      setImagePopupPos({
+        top: topPos,
+        left: rect.left - wrapper.left + rect.width / 2
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      handleContentChange();
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, selectedImage, dragStartWidth, dragStartMouseX, dragDirection]);
 
 
   if (!note) {
@@ -460,23 +509,41 @@ export default function Editor({
   // Custom mouse down logic for grid cell selection
   const handleEditorMouseDown = (e) => {
     if (e.target.tagName === 'IMG') {
-      e.preventDefault();
       const img = e.target;
-      setSelectedImage(img);
-      setShowBorderControls(false);
-      
       const rect = img.getBoundingClientRect();
-      const wrapper = editorRef.current.parentNode.getBoundingClientRect();
+      const mouseX = e.clientX;
       
-      const offset = 48;
-      let topPos = rect.top - wrapper.top - offset;
-      if (topPos < 55) {
-        topPos = rect.bottom - wrapper.top + 8;
+      // Determine if clicking near left or right edge (within 20px)
+      const isNearLeft = mouseX - rect.left < 20;
+      const isNearRight = rect.right - mouseX < 20;
+      
+      if (isNearLeft || isNearRight) {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedImage(img);
+        setIsDragging(true);
+        setDragDirection(isNearLeft ? 'left' : 'right');
+        setDragStartWidth(img.clientWidth);
+        setDragStartMouseX(mouseX);
+        // Hide popup while dragging to prevent overlap or visual clutter
+        setShowBorderControls(false);
+      } else {
+        // Just selecting the image by clicking the center
+        e.preventDefault();
+        setSelectedImage(img);
+        setShowBorderControls(false);
+        
+        const wrapper = editorRef.current.parentNode.getBoundingClientRect();
+        const offset = 48;
+        let topPos = rect.top - wrapper.top - offset;
+        if (topPos < 55) {
+          topPos = rect.bottom - wrapper.top + 8;
+        }
+        setImagePopupPos({
+          top: topPos,
+          left: rect.left - wrapper.left + rect.width / 2
+        });
       }
-      setImagePopupPos({
-        top: topPos,
-        left: rect.left - wrapper.left + rect.width / 2
-      });
       return;
     }
 
@@ -557,6 +624,21 @@ export default function Editor({
     } else {
       // Clear cell highlights if clicked outside table
       editorRef.current?.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+    }
+  };
+
+  // Editor Mouse Move Listener (updates cursor for image resize)
+  const handleEditorMouseMove = (e) => {
+    if (e.target.tagName === 'IMG') {
+      const img = e.target;
+      const rect = img.getBoundingClientRect();
+      const isNearLeft = e.clientX - rect.left < 20;
+      const isNearRight = rect.right - e.clientX < 20;
+      if (isNearLeft || isNearRight) {
+        img.style.cursor = 'ew-resize';
+      } else {
+        img.style.cursor = 'pointer';
+      }
     }
   };
 
@@ -1426,47 +1508,7 @@ export default function Editor({
                 </>
               )}
               
-              <div className="toolbar-divider" style={{ height: '14px', margin: '0 8px' }} />
-              
-              {/* Image resize slider */}
-              <div className="flex-row" style={{ gap: '6px', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Resize:</span>
-                <input 
-                  type="range"
-                  min="60"
-                  max="1000"
-                  value={parseInt(selectedImage.style.width) || selectedImage.clientWidth || 300}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    selectedImage.style.width = `${val}px`;
-                    selectedImage.style.height = 'auto'; // Preserves aspect ratio
-                    handleContentChange();
-                    
-                    // Update floating popup coordinates dynamically
-                    const rect = selectedImage.getBoundingClientRect();
-                    const wrapper = editorRef.current.parentNode.getBoundingClientRect();
-                    const offset = 48;
-                    let topPos = rect.top - wrapper.top - offset;
-                    if (topPos < 55) {
-                      topPos = rect.bottom - wrapper.top + 8;
-                    }
-                    setImagePopupPos({
-                      top: topPos,
-                      left: rect.left - wrapper.left + rect.width / 2
-                    });
-                  }}
-                  style={{
-                    width: '70px',
-                    height: '4px',
-                    borderRadius: '2px',
-                    accentColor: 'var(--accent-color)',
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                />
-              </div>
 
-              <div className="toolbar-divider" style={{ height: '14px', margin: '0 8px' }} />
               
               <button 
                 className="icon-btn" 
@@ -1493,6 +1535,7 @@ export default function Editor({
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
             onMouseDown={handleEditorMouseDown}
+            onMouseMove={handleEditorMouseMove}
             onClick={handleEditorClick}
             onContextMenu={handleContextMenu}
             onCopy={handleCopy}
