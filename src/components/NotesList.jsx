@@ -33,8 +33,23 @@ export default function NotesList({
     }
   };
 
+  // 1.5. Map notes to use draft versions if they exist
+  const displayNotes = notes.map(note => {
+    if (note.draft) {
+      return {
+        ...note,
+        title: note.draft.title !== undefined ? note.draft.title : note.title,
+        content: note.draft.content !== undefined ? note.draft.content : note.content,
+        emoji: note.draft.emoji !== undefined ? note.draft.emoji : note.emoji,
+        tags: note.draft.tags !== undefined ? note.draft.tags : note.tags,
+        folderId: note.draft.folderId !== undefined ? note.draft.folderId : note.folderId,
+      };
+    }
+    return note;
+  });
+
   // 2. Filter notes
-  const filteredNotes = notes.filter((note) => {
+  const filteredNotes = displayNotes.filter((note) => {
     // First, filter by trash status
     if (activeFilter.type === 'trash') {
       if (!note.isTrash) return false;
@@ -186,14 +201,17 @@ export default function NotesList({
                 onClick={() => onSelectNote(note.id)}
               >
                 <div className="note-card-title flex-between">
-                  <div className="flex-row" style={{ gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div className="flex-row" style={{ gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis', alignItems: 'center', flex: 1 }}>
                     <span>{note.emoji || '📓'}</span>
-                    <span style={{ fontWeight: isActive ? '600' : '500' }}>
+                    <span style={{ fontWeight: isActive ? '600' : '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {note.title || 'Untitled Note'}
                     </span>
+                    {note.draft && (
+                      <span className="draft-badge">Draft</span>
+                    )}
                   </div>
                   {note.isFavorite && (
-                    <Star size={12} style={{ fill: 'var(--accent-color)', color: 'var(--accent-color)', flexShrink: 0 }} />
+                    <Star size={12} style={{ fill: 'var(--accent-color)', color: 'var(--accent-color)', flexShrink: 0, marginLeft: '6px' }} />
                   )}
                 </div>
 

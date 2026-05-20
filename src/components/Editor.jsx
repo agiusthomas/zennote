@@ -62,6 +62,31 @@ export default function Editor({
   const tagInputRef = useRef(null);
   const imageInputRef = useRef(null);
 
+  const [isEditing, setIsEditing] = useState(false);
+
+  const activeTitle = note ? (note.draft ? note.draft.title : note.title) : '';
+  const activeEmoji = note ? (note.draft ? note.draft.emoji : note.emoji) : '📓';
+  const activeTags = note ? (note.draft ? note.draft.tags : note.tags) : [];
+  const activeFolderId = note ? (note.draft ? note.draft.folderId : note.folderId) : null;
+  const activeContent = note ? (note.draft ? note.draft.content : note.content) : '';
+
+  const updateDraft = (fields) => {
+    if (!note) return;
+    const currentDraft = note.draft || {
+      title: note.title || '',
+      content: note.content || '<p><br></p>',
+      emoji: note.emoji || '📓',
+      tags: note.tags || [],
+      folderId: note.folderId || null
+    };
+    onUpdateNote(note.id, {
+      draft: {
+        ...currentDraft,
+        ...fields
+      }
+    });
+  };
+
   // Auto-focus tag input when shown
   useEffect(() => {
     if (showTagInput) {
@@ -72,12 +97,32 @@ export default function Editor({
   // Sync state into contentEditable innerHTML when note ID changes
   useEffect(() => {
     if (editorRef.current && note) {
-      if (editorRef.current.innerHTML !== note.content) {
-        editorRef.current.innerHTML = note.content || '<p><br></p>';
+      const displayContent = note.draft ? note.draft.content : (note.content || '<p><br></p>');
+      if (editorRef.current.innerHTML !== displayContent) {
+        editorRef.current.innerHTML = displayContent;
       }
       setSelectedImage(null);
       setShowBorderControls(false);
       updateBlockType();
+
+      // Auto-enter editing mode for new blank notes
+      const isNewBlankNote = !note.title && !note.content && !note.draft;
+      if (isNewBlankNote) {
+        setIsEditing(true);
+        // Initialize draft immediately for blank note
+        onUpdateNote(note.id, {
+          draft: {
+            title: '',
+            content: '<p><br></p>',
+            emoji: note.emoji || '📝',
+            tags: [],
+            folderId: note.folderId
+          }
+        });
+      } else {
+        setIsEditing(false);
+      }
+
       try {
         document.execCommand('enableObjectResizing', false, 'false');
       } catch (e) {}
@@ -252,21 +297,22 @@ export default function Editor({
 
   // Handle rich text updates
   const handleContentChange = () => {
-    if (editorRef.current) {
+    if (editorRef.current && isEditing) {
       const content = editorRef.current.innerHTML;
-      if (content !== note.content) {
-        onUpdateNote(note.id, { content });
+      const currentContent = note.draft ? note.draft.content : note.content;
+      if (content !== currentContent) {
+        updateDraft({ content });
       }
       updateBlockType();
     }
   };
 
   const handleTitleChange = (e) => {
-    onUpdateNote(note.id, { title: e.target.value });
+    updateDraft({ title: e.target.value });
   };
 
   const handleEmojiSelect = (emoji) => {
-    onUpdateNote(note.id, { emoji });
+    updateDraft({ emoji });
   };
 
   const toggleFavorite = () => {
@@ -276,15 +322,63 @@ export default function Editor({
   const handleAddTag = (e) => {
     e.preventDefault();
     const tag = newTag.trim().toLowerCase();
-    if (tag && !note.tags.includes(tag)) {
-      onUpdateNote(note.id, { tags: [...note.tags, tag] });
+    const currentTags = note.draft ? note.draft.tags : note.tags;
+    if (tag && !currentTags.includes(tag)) {
+      updateDraft({ tags: [...currentTags, tag] });
     }
     setNewTag('');
     setShowTagInput(false);
   };
 
   const handleRemoveTag = (tagToRemove) => {
-    onUpdateNote(note.id, { tags: note.tags.filter(t => t !== tagToRemove) });
+    const currentTags = note.draft ? note.draft.tags : note.tags;
+    updateDraft({ tags: currentTags.filter(t => t !== tagToRemove) });
+  };
+
+  const handleStartEdit = () => {
+    if (!note.draft) {
+      onUpdateNote(note.id, {
+        draft: {
+          title: note.title || '',
+          content: note.content || '<p><br></p>',
+          emoji: note.emoji || '📓',
+          tags: note.tags || [],
+          folderId: note.folderId || null
+        }
+      });
+    }
+    setIsEditing(true);
+  };
+
+  const handlePublish = () => {
+    if (note.draft) {
+      onUpdateNote(note.id, {
+        title: note.draft.title,
+        content: note.draft.content,
+        emoji: note.draft.emoji,
+        tags: note.draft.tags,
+        folderId: note.draft.folderId,
+        draft: null // clear draft
+      });
+    }
+    setIsEditing(false);
+  };
+
+  const handleDiscardDraft = () => {
+    if (window.confirm('Are you sure you want to discard your draft changes? This cannot be undone.')) {
+      onUpdateNote(note.id, {
+        draft: null
+      });
+      setIsEditing(false);
+      // Reset editor content immediately to published content
+      if (editorRef.current) {
+        editorRef.current.innerHTML = note.content || '<p><br></p>';
+      }
+    }
+  };
+
+  const handleCloseKeepDraft = () => {
+    setIsEditing(false);
   };
 
   // Formatting helpers using execCommand
@@ -662,8 +756,8 @@ export default function Editor({
 
   // Statistics (stripping HTML tags first)
   const getStats = () => {
-    if (!note.content) return { words: 0, chars: 0, readTime: 1 };
-    const plainText = note.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!activeContent) return { words: 0, chars: 0, readTime: 1 };
+    const plainText = activeContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     const words = plainText.split(/\s+/).filter(Boolean).length;
     const chars = plainText.length;
     const readTime = Math.max(1, Math.ceil(words / 200));
@@ -671,7 +765,7 @@ export default function Editor({
   };
 
   const stats = getStats();
-  const breadcrumbs = getFolderBreadcrumbs(note.folderId, folders);
+  const breadcrumbs = getFolderBreadcrumbs(activeFolderId, folders);
 
 
 
@@ -1039,8 +1133,8 @@ export default function Editor({
             <React.Fragment key={folder.id}>
               <span>/</span>
               <span 
-                style={{ cursor: 'pointer' }}
-                onClick={() => onMoveNote && onMoveNote(note.id, folder.id)}
+                style={{ cursor: isEditing ? 'pointer' : 'default' }}
+                onClick={() => isEditing && onMoveNote && updateDraft({ folderId: folder.id })}
               >
                 {folder.name}
               </span>
@@ -1050,15 +1144,23 @@ export default function Editor({
           {/* Simple Folder Mover Dropdown */}
           {!note.isTrash && (
             <select
-              value={note.folderId || ''}
-              onChange={(e) => onMoveNote(note.id, e.target.value || null)}
+              value={activeFolderId || ''}
+              onChange={(e) => {
+                const fId = e.target.value || null;
+                if (isEditing) {
+                  updateDraft({ folderId: fId });
+                } else {
+                  onMoveNote(note.id, fId);
+                }
+              }}
+              disabled={!isEditing}
               style={{
                 background: 'transparent',
                 border: 'none',
                 color: 'var(--text-muted)',
                 fontSize: '12px',
                 marginLeft: '8px',
-                cursor: 'pointer'
+                cursor: isEditing ? 'pointer' : 'default'
               }}
             >
               <option value="">Move to Root</option>
@@ -1074,11 +1176,11 @@ export default function Editor({
           <div style={{ position: 'relative' }}>
             <button 
               className="emoji-selector-trigger"
-              onClick={() => !note.isTrash && setShowEmojiPicker(!showEmojiPicker)}
-              disabled={note.isTrash}
+              onClick={() => !note.isTrash && isEditing && setShowEmojiPicker(!showEmojiPicker)}
+              disabled={!isEditing || note.isTrash}
               title="Select note header emoji"
             >
-              {note.emoji || '📓'}
+              {activeEmoji || '📓'}
             </button>
             {showEmojiPicker && (
               <EmojiPicker 
@@ -1090,30 +1192,66 @@ export default function Editor({
 
           <input
             type="text"
-            className="editor-title-input"
-            value={note.title}
+            className={`editor-title-input ${!isEditing ? 'read-only' : ''}`}
+            value={activeTitle}
             onChange={handleTitleChange}
             placeholder="Untitled Note"
-            disabled={note.isTrash}
+            disabled={!isEditing || note.isTrash}
             title="Note title"
           />
 
           {!note.isTrash && (
-            <div className="flex-row" style={{ gap: '8px' }}>
-              <button 
-                className={`icon-btn ${note.isFavorite ? 'active' : ''}`}
-                onClick={toggleFavorite}
-                title={note.isFavorite ? 'Remove from Favorites' : 'Mark as Favorite'}
-              >
-                <Star size={20} style={{ fill: note.isFavorite ? 'currentColor' : 'none' }} />
-              </button>
-              <button 
-                className="icon-btn" 
-                onClick={() => onDeleteNoteForever(note.id, false /* send to trash */)}
-                title="Move note to Trash"
-              >
-                <Trash size={20} />
-              </button>
+            <div className="flex-row" style={{ gap: '8px', alignItems: 'center' }}>
+              {isEditing ? (
+                <>
+                  <button className="btn btn-primary" onClick={handlePublish} style={{ padding: '6px 12px', fontSize: '13px' }}>
+                    Save
+                  </button>
+                  <button className="btn btn-secondary" onClick={handleCloseKeepDraft} style={{ padding: '6px 12px', fontSize: '13px' }}>
+                    Cancel
+                  </button>
+                  {note.draft && (
+                    <button className="btn btn-discard" onClick={handleDiscardDraft} style={{ padding: '6px 12px', fontSize: '13px' }}>
+                      Discard Draft
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  {note.draft && (
+                    <span className="draft-header-badge" style={{ marginRight: '8px' }}>
+                      Draft Version
+                    </span>
+                  )}
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={handleStartEdit} 
+                    style={{ padding: '6px 12px', fontSize: '13px' }}
+                    title="Edit note"
+                  >
+                    Edit
+                  </button>
+                  {note.draft && (
+                    <button className="btn btn-discard" onClick={handleDiscardDraft} style={{ padding: '6px 12px', fontSize: '13px' }}>
+                      Discard Draft
+                    </button>
+                  )}
+                  <button 
+                    className={`icon-btn ${note.isFavorite ? 'active' : ''}`}
+                    onClick={toggleFavorite}
+                    title={note.isFavorite ? 'Remove from Favorites' : 'Mark as Favorite'}
+                  >
+                    <Star size={20} style={{ fill: note.isFavorite ? 'currentColor' : 'none' }} />
+                  </button>
+                  <button 
+                    className="icon-btn" 
+                    onClick={() => onDeleteNoteForever(note.id, false /* send to trash */)}
+                    title="Move note to Trash"
+                  >
+                    <Trash size={20} />
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1121,10 +1259,10 @@ export default function Editor({
         {/* Tags Row */}
         <div className="editor-tags-row">
           <TagIcon size={14} style={{ color: 'var(--text-muted)' }} />
-          {note.tags.map(tag => (
+          {activeTags.map(tag => (
             <span key={tag} className="editor-tag-pill">
               #{tag}
-              {!note.isTrash && (
+              {!note.isTrash && isEditing && (
                 <span className="editor-tag-remove" onClick={() => handleRemoveTag(tag)} title={`Remove #${tag}`}>
                   <X size={12} />
                 </span>
@@ -1132,7 +1270,7 @@ export default function Editor({
             </span>
           ))}
 
-          {!note.isTrash && (
+          {!note.isTrash && isEditing && (
             <>
               {showTagInput ? (
                 <form onSubmit={handleAddTag} style={{ display: 'inline-flex' }}>
@@ -1158,8 +1296,8 @@ export default function Editor({
         </div>
       </div>
 
-      {/* Editor Toolbar (Only show if not in Trash) */}
-      {!note.isTrash && (
+      {/* Editor Toolbar (Only show if not in Trash and in Edit Mode) */}
+      {!note.isTrash && isEditing && (
         <div className="editor-toolbar">
           {/* Format buttons */}
           <div className="toolbar-group">
@@ -1311,7 +1449,7 @@ export default function Editor({
 
 
           {/* Table Hover Edge Plus Buttons */}
-          {activeCell && !note.isTrash && (
+          {activeCell && !note.isTrash && isEditing && (
             <>
               {/* Row insertion plus button */}
               <button
@@ -1360,7 +1498,7 @@ export default function Editor({
           <div
             ref={editorRef}
             className="wysiwyg-editor"
-            contentEditable={!note.isTrash}
+            contentEditable={isEditing && !note.isTrash}
             onInput={handleContentChange}
             onBlur={handleContentChange}
             onPaste={handlePaste}
@@ -1392,7 +1530,7 @@ export default function Editor({
             >
               <div className="image-resize-outline" />
 
-              {!note.isTrash && (
+              {!note.isTrash && isEditing && (
                 <div 
                   className="image-resize-handle left-handle"
                   style={{ pointerEvents: 'auto' }}
@@ -1400,7 +1538,7 @@ export default function Editor({
                 />
               )}
 
-              {!note.isTrash && (
+              {!note.isTrash && isEditing && (
                 <div 
                   className="image-resize-handle right-handle"
                   style={{ pointerEvents: 'auto' }}
@@ -1411,7 +1549,7 @@ export default function Editor({
           )}
 
           {/* Floating Image Editor Toolbar — rendered AFTER editor so it paints on top */}
-          {selectedImage && (
+          {selectedImage && isEditing && (
             <div 
               className="image-context-popup" 
               style={{ 
@@ -1592,7 +1730,7 @@ export default function Editor({
           )}
 
           {/* Table Context Menu */}
-          {showContextMenu && activeCell && (
+          {showContextMenu && activeCell && isEditing && (
             <div 
               className="table-context-menu"
               style={{

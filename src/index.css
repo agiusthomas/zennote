@@ -1355,3 +1355,89 @@ button {
     scrollbar-width: none;
   }
 }
+
+/* Draft Mode & Reader/Editor Visual Aesthetics */
+.draft-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.note-card.active .draft-badge {
+  background-color: var(--accent-light);
+  color: var(--accent-color);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.editor-title-input:disabled {
+  color: var(--text-primary);
+  cursor: default;
+  opacity: 1;
+  background: transparent;
+}
+
+.editor-breadcrumbs select:disabled {
+  opacity: 0.7;
+  cursor: default;
+  pointer-events: none;
+}
+
+.emoji-selector-trigger:disabled {
+  cursor: default;
+  background-color: transparent;
+  border-color: transparent;
+  transform: none !important;
+}
+
+.btn-discard {
+  background-color: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  transition: all var(--transition-fast);
+}
+
+.btn-discard:hover {
+  background-color: #ef4444;
+  color: white;
+}
+
+.draft-header-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background-color: var(--accent-light);
+  color: var(--accent-color);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Hide editable outline focus and block helpers in read-only mode */
+.wysiwyg-editor[contenteditable="false"] {
+  caret-color: transparent;
+}
+
+.wysiwyg-editor[contenteditable="false"] img:hover {
+  outline: none;
+  cursor: default;
+}
+
+.wysiwyg-editor[contenteditable="false"] table tr:hover {
+  background-color: transparent;
+}
+
+.wysiwyg-editor[contenteditable="false"] a {
+  cursor: pointer;
+}
+
