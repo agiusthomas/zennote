@@ -833,6 +833,49 @@ button {
   background-color: var(--bg-secondary);
 }
 
+.image-resize-overlay {
+  box-sizing: border-box;
+}
+
+.image-resize-outline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 1.5px dashed var(--accent-color);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.image-resize-handle {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 24px;
+  background-color: var(--accent-color);
+  border: 1px solid var(--bg-primary);
+  border-radius: var(--radius-sm);
+  transform: translateY(-50%);
+  cursor: ew-resize;
+  box-shadow: var(--shadow-sm);
+  z-index: 12;
+  transition: transform 0.1s ease, background-color 0.1s ease;
+}
+
+.image-resize-handle:hover {
+  background-color: var(--accent-hover, var(--accent-color));
+  transform: translateY(-50%) scale(1.12);
+}
+
+.image-resize-handle.left-handle {
+  left: -4px;
+}
+
+.image-resize-handle.right-handle {
+  right: -4px;
+}
+
 .image-context-popup {
   display: flex;
   align-items: center;

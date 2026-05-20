@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Star, 
   Trash2, 
@@ -61,6 +61,7 @@ export default function Editor({
   const [dragStartWidth, setDragStartWidth] = useState(0);
   const [dragStartMouseX, setDragStartMouseX] = useState(0);
   const [dragDirection, setDragDirection] = useState('right'); // 'left' | 'right'
+  const [imageOverlayPos, setImageOverlayPos] = useState({ top: 0, left: 0, width: 0, height: 0 });
 
   const editorRef = useRef(null);
   const tagInputRef = useRef(null);
@@ -111,7 +112,7 @@ export default function Editor({
   useEffect(() => {
     const handleGlobalClick = (e) => {
       const wrapper = editorRef.current?.parentNode;
-      if (wrapper && !wrapper.contains(e.target) && !e.target.closest('.image-context-popup')) {
+      if (wrapper && !wrapper.contains(e.target) && !e.target.closest('.image-context-popup') && !e.target.closest('.image-resize-overlay')) {
         setSelectedImage(null);
         setShowBorderControls(false);
       }
@@ -167,17 +168,64 @@ export default function Editor({
     };
   }, []);
 
-  // Window resize listener to dismiss image selection
+  const updateImageOverlayPosition = useCallback(() => {
+    if (!selectedImage || !editorRef.current) return;
+    const rect = selectedImage.getBoundingClientRect();
+    const wrapper = editorRef.current.parentNode.getBoundingClientRect();
+    
+    setImageOverlayPos({
+      top: rect.top - wrapper.top,
+      left: rect.left - wrapper.left,
+      width: rect.width,
+      height: rect.height
+    });
+
+    // Also update the floating toolbar position!
+    const offset = 48;
+    let topPos = rect.top - wrapper.top - offset;
+    if (topPos < 55) {
+      topPos = rect.bottom - wrapper.top + 8;
+    }
+    setImagePopupPos({
+      top: topPos,
+      left: rect.left - wrapper.left + rect.width / 2
+    });
+  }, [selectedImage]);
+
+  // Update positions when selectedImage changes
+  useEffect(() => {
+    if (selectedImage) {
+      updateImageOverlayPosition();
+    }
+  }, [selectedImage, updateImageOverlayPosition]);
+
+  // Window resize and scroll listeners to keep overlay in sync
   useEffect(() => {
     const handleResize = () => {
-      setSelectedImage(null);
-      setShowBorderControls(false);
+      if (selectedImage) {
+        updateImageOverlayPosition();
+      }
     };
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, []);
+  }, [selectedImage, updateImageOverlayPosition]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const handleScroll = () => {
+      if (selectedImage) {
+        updateImageOverlayPosition();
+      }
+    };
+    editor.addEventListener('scroll', handleScroll);
+    return () => {
+      editor.removeEventListener('scroll', handleScroll);
+    };
+  }, [selectedImage, updateImageOverlayPosition]);
 
   // Global Mouse Move and Mouse Up drag resizing handlers
   useEffect(() => {
@@ -194,20 +242,7 @@ export default function Editor({
       selectedImage.style.width = `${newWidth}px`;
       selectedImage.style.height = 'auto'; // Preserves aspect ratio
 
-      // Recalculate popup position dynamically
-      const rect = selectedImage.getBoundingClientRect();
-      const wrapper = editorRef.current.parentNode.getBoundingClientRect();
-      
-      const offset = 48;
-      let topPos = rect.top - wrapper.top - offset;
-      if (topPos < 55) {
-        topPos = rect.bottom - wrapper.top + 8; // below image
-      }
-
-      setImagePopupPos({
-        top: topPos,
-        left: rect.left - wrapper.left + rect.width / 2
-      });
+      updateImageOverlayPosition();
     };
 
     const handleMouseUp = () => {
@@ -221,7 +256,7 @@ export default function Editor({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, selectedImage, dragStartWidth, dragStartMouseX, dragDirection]);
+  }, [isDragging, selectedImage, dragStartWidth, dragStartMouseX, dragDirection, updateImageOverlayPosition]);
 
 
   if (!note) {
@@ -506,44 +541,22 @@ export default function Editor({
     setBlockType('p');
   };
 
+  const handleResizeMouseDown = (e, direction) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+    setDragDirection(direction);
+    setDragStartWidth(selectedImage.getBoundingClientRect().width);
+    setDragStartMouseX(e.clientX);
+    setShowBorderControls(false);
+  };
+
   // Custom mouse down logic for grid cell selection
   const handleEditorMouseDown = (e) => {
     if (e.target.tagName === 'IMG') {
-      const img = e.target;
-      const rect = img.getBoundingClientRect();
-      const mouseX = e.clientX;
-      
-      // Determine if clicking near left or right edge (within 20px)
-      const isNearLeft = mouseX - rect.left < 20;
-      const isNearRight = rect.right - mouseX < 20;
-      
-      if (isNearLeft || isNearRight) {
-        e.preventDefault();
-        e.stopPropagation();
-        setSelectedImage(img);
-        setIsDragging(true);
-        setDragDirection(isNearLeft ? 'left' : 'right');
-        setDragStartWidth(rect.width);
-        setDragStartMouseX(mouseX);
-        // Hide popup while dragging to prevent overlap or visual clutter
-        setShowBorderControls(false);
-      } else {
-        // Just selecting the image by clicking the center
-        e.preventDefault();
-        setSelectedImage(img);
-        setShowBorderControls(false);
-        
-        const wrapper = editorRef.current.parentNode.getBoundingClientRect();
-        const offset = 48;
-        let topPos = rect.top - wrapper.top - offset;
-        if (topPos < 55) {
-          topPos = rect.bottom - wrapper.top + 8;
-        }
-        setImagePopupPos({
-          top: topPos,
-          left: rect.left - wrapper.left + rect.width / 2
-        });
-      }
+      e.preventDefault();
+      setSelectedImage(e.target);
+      setShowBorderControls(false);
       return;
     }
 
@@ -627,22 +640,7 @@ export default function Editor({
     }
   };
 
-  // Editor Mouse Move Listener (updates cursor for image resize)
-  const handleEditorMouseMove = (e) => {
-    if (e.target.tagName === 'IMG') {
-      const img = e.target;
-      const rect = img.getBoundingClientRect();
-      const isNearLeft = e.clientX - rect.left < 20;
-      const isNearRight = rect.right - e.clientX < 20;
-      if (isNearLeft || isNearRight) {
-        img.style.cursor = 'ew-resize';
-      } else {
-        img.style.cursor = 'pointer';
-      }
-    }
-  };
-
-  // Editor Click Listener (handles image popup opening)
+// Editor Click Listener (handles image popup opening)
   const handleEditorClick = (e) => {
     if (e.target.tagName === 'IMG') {
       // Handled by handleEditorMouseDown to prevent browser default handles
@@ -1529,6 +1527,43 @@ export default function Editor({
             </div>
           )}
 
+          {/* Image Resize Overlay Handles */}
+          {selectedImage && (
+            <div 
+              className="image-resize-overlay"
+              style={{
+                position: 'absolute',
+                top: `${imageOverlayPos.top}px`,
+                left: `${imageOverlayPos.left}px`,
+                width: `${imageOverlayPos.width}px`,
+                height: `${imageOverlayPos.height}px`,
+                pointerEvents: 'none',
+                zIndex: 10
+              }}
+            >
+              {/* Highlight outline border */}
+              <div className="image-resize-outline" />
+
+              {/* Left Resize Handle */}
+              {!note.isTrash && (
+                <div 
+                  className="image-resize-handle left-handle"
+                  style={{ pointerEvents: 'auto' }}
+                  onMouseDown={(e) => handleResizeMouseDown(e, 'left')}
+                />
+              )}
+
+              {/* Right Resize Handle */}
+              {!note.isTrash && (
+                <div 
+                  className="image-resize-handle right-handle"
+                  style={{ pointerEvents: 'auto' }}
+                  onMouseDown={(e) => handleResizeMouseDown(e, 'right')}
+                />
+              )}
+            </div>
+          )}
+
           <div
             ref={editorRef}
             className="wysiwyg-editor"
@@ -1538,7 +1573,6 @@ export default function Editor({
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
             onMouseDown={handleEditorMouseDown}
-            onMouseMove={handleEditorMouseMove}
             onClick={handleEditorClick}
             onContextMenu={handleContextMenu}
             onCopy={handleCopy}
