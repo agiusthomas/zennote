@@ -56,11 +56,6 @@ export default function Editor({
   const [anchorCell, setAnchorCell] = useState(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
-  // Drag resizing states
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStartWidth, setDragStartWidth] = useState(0);
-  const [dragStartMouseX, setDragStartMouseX] = useState(0);
-  const [dragDirection, setDragDirection] = useState('right'); // 'left' | 'right'
   const [imageOverlayPos, setImageOverlayPos] = useState({ top: 0, left: 0, width: 0, height: 0 });
 
   const editorRef = useRef(null);
@@ -227,36 +222,7 @@ export default function Editor({
     };
   }, [selectedImage, updateImageOverlayPosition]);
 
-  // Global Mouse Move and Mouse Up drag resizing handlers
-  useEffect(() => {
-    if (!isDragging || !selectedImage) return;
 
-    const handleMouseMove = (e) => {
-      const deltaX = e.clientX - dragStartMouseX;
-      let newWidth = dragStartWidth + (dragDirection === 'right' ? deltaX : -deltaX);
-      
-      // Keep width constraints between 60px and the editor boundaries
-      const editorWidth = editorRef.current.clientWidth - 80;
-      newWidth = Math.max(60, Math.min(newWidth, editorWidth));
-      
-      selectedImage.style.width = `${newWidth}px`;
-      selectedImage.style.height = 'auto'; // Preserves aspect ratio
-
-      updateImageOverlayPosition();
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      handleContentChange();
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, selectedImage, dragStartWidth, dragStartMouseX, dragDirection, updateImageOverlayPosition]);
 
 
   if (!note) {
@@ -544,11 +510,54 @@ export default function Editor({
   const handleResizeMouseDown = (e, direction) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
-    setDragDirection(direction);
-    setDragStartWidth(selectedImage.getBoundingClientRect().width);
-    setDragStartMouseX(e.clientX);
-    setShowBorderControls(false);
+
+    const img = selectedImage;
+    if (!img) return;
+
+    const startWidth = img.getBoundingClientRect().width;
+    const startMouseX = e.clientX;
+    const editorWidth = editorRef.current.clientWidth - 80;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startMouseX;
+      let newWidth = startWidth + (direction === 'right' ? deltaX : -deltaX);
+      
+      newWidth = Math.max(60, Math.min(newWidth, editorWidth));
+      
+      img.style.width = `${newWidth}px`;
+      img.style.height = 'auto'; // Preserves aspect ratio
+
+      // Update overlay coordinates synchronously
+      const rect = img.getBoundingClientRect();
+      const wrapper = editorRef.current.parentNode.getBoundingClientRect();
+      
+      setImageOverlayPos({
+        top: rect.top - wrapper.top,
+        left: rect.left - wrapper.left,
+        width: rect.width,
+        height: rect.height
+      });
+
+      // Also update the floating toolbar position
+      const offset = 48;
+      let topPos = rect.top - wrapper.top - offset;
+      if (topPos < 55) {
+        topPos = rect.bottom - wrapper.top + 8;
+      }
+      setImagePopupPos({
+        top: topPos,
+        left: rect.left - wrapper.left + rect.width / 2
+      });
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      handleContentChange();
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
   };
 
   // Custom mouse down logic for grid cell selection
