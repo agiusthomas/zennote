@@ -57,12 +57,6 @@ export default function Editor({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
 
-  // Drag resizing states
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStartWidth, setDragStartWidth] = useState(0);
-  const [dragStartMouseX, setDragStartMouseX] = useState(0);
-  const [dragDirection, setDragDirection] = useState('right'); // 'left' | 'right'
-  
   const editorRef = useRef(null);
   const tagInputRef = useRef(null);
   const imageInputRef = useRef(null);
@@ -83,6 +77,9 @@ export default function Editor({
       setSelectedImage(null);
       setShowBorderControls(false);
       updateBlockType();
+      try {
+        document.execCommand('enableObjectResizing', false, 'false');
+      } catch (e) {}
     }
   }, [note?.id]);
 
@@ -177,49 +174,6 @@ export default function Editor({
     };
   }, []);
 
-  // Global Mouse Move and Mouse Up drag resizing handlers
-  useEffect(() => {
-    if (!isDragging || !selectedImage) return;
-
-    const handleMouseMove = (e) => {
-      const deltaX = e.clientX - dragStartMouseX;
-      let newWidth = dragStartWidth + (dragDirection === 'right' ? deltaX : -deltaX);
-      
-      // Keep width constraints between 60px and the editor field boundaries
-      const editorWidth = editorRef.current.clientWidth - 80;
-      newWidth = Math.max(60, Math.min(newWidth, editorWidth));
-      
-      selectedImage.style.width = `${newWidth}px`;
-      selectedImage.style.height = 'auto'; // Preserves aspect ratio
-
-      // Recalculate popup and handle positions on layout update
-      const rect = selectedImage.getBoundingClientRect();
-      const wrapper = editorRef.current.parentNode.getBoundingClientRect();
-      
-      const offset = 48;
-      let topPos = rect.top - wrapper.top - offset;
-      if (topPos < 55) {
-        topPos = rect.bottom - wrapper.top + 8; // below image
-      }
-
-      setImagePopupPos({
-        top: topPos,
-        left: rect.left - wrapper.left + rect.width / 2
-      });
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      handleContentChange();
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, selectedImage, dragStartWidth, dragStartMouseX, dragDirection]);
 
   if (!note) {
     return (
@@ -505,6 +459,27 @@ export default function Editor({
 
   // Custom mouse down logic for grid cell selection
   const handleEditorMouseDown = (e) => {
+    if (e.target.tagName === 'IMG') {
+      e.preventDefault();
+      const img = e.target;
+      setSelectedImage(img);
+      setShowBorderControls(false);
+      
+      const rect = img.getBoundingClientRect();
+      const wrapper = editorRef.current.parentNode.getBoundingClientRect();
+      
+      const offset = 48;
+      let topPos = rect.top - wrapper.top - offset;
+      if (topPos < 55) {
+        topPos = rect.bottom - wrapper.top + 8;
+      }
+      setImagePopupPos({
+        top: topPos,
+        left: rect.left - wrapper.left + rect.width / 2
+      });
+      return;
+    }
+
     const isRightClick = e.button === 2 || (e.button === 0 && e.ctrlKey);
     const cell = e.target.closest('td, th');
     
@@ -588,41 +563,13 @@ export default function Editor({
   // Editor Click Listener (handles image popup opening)
   const handleEditorClick = (e) => {
     if (e.target.tagName === 'IMG') {
-      const img = e.target;
-      setSelectedImage(img);
-      setShowBorderControls(false); // Reset submenu to primary toolbar options
-      
-      const rect = img.getBoundingClientRect();
-      const wrapper = editorRef.current.parentNode.getBoundingClientRect();
-      
-      // Calculate top coordinate, offset by 48px
-      const offset = 48;
-      let topPos = rect.top - wrapper.top - offset;
-      
-      // Flip position below image if it overlaps with the top toolbar (topPos < 55px)
-      if (topPos < 55) {
-        topPos = rect.bottom - wrapper.top + 8;
-      }
-      
-      setImagePopupPos({
-        top: topPos,
-        left: rect.left - wrapper.left + rect.width / 2
-      });
-    } else {
-      setSelectedImage(null);
-      setShowBorderControls(false);
+      // Handled by handleEditorMouseDown to prevent browser default handles
+      return;
     }
+    setSelectedImage(null);
+    setShowBorderControls(false);
   };
 
-  // Initialize drag action
-  const startDrag = (e, direction) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-    setDragDirection(direction);
-    setDragStartWidth(selectedImage.clientWidth);
-    setDragStartMouseX(e.clientX);
-  };
 
   // Statistics (stripping HTML tags first)
   const getStats = () => {
@@ -637,11 +584,7 @@ export default function Editor({
   const stats = getStats();
   const breadcrumbs = getFolderBreadcrumbs(note.folderId, folders);
 
-  // Calculate side handles styles dynamically for the selected image
-  let handleLeft = 0;
-  let handleRight = 0;
-  let handleTop = 0;
-  let handleHeight = 0;
+
 
   // Insert custom table element
   const insertTable = (rows, cols) => {
@@ -929,15 +872,7 @@ export default function Editor({
     }
   };
 
-  if (selectedImage && editorRef.current) {
-    const rect = selectedImage.getBoundingClientRect();
-    const wrapper = editorRef.current.parentNode.getBoundingClientRect();
-    
-    handleTop = rect.top - wrapper.top;
-    handleLeft = rect.left - wrapper.left;
-    handleRight = rect.right - wrapper.left;
-    handleHeight = rect.height;
-  }
+
 
   // Calculate coordinates for table plus icons
   let rowPlusPos = { top: 0, left: 0 };
@@ -1284,31 +1219,7 @@ export default function Editor({
       {/* Editor Content Area */}
       <div className="editor-split-container">
         <div className="editor-textarea-wrapper" style={{ position: 'relative' }}>
-          {/* Overlay Resize Handles */}
-          {selectedImage && !note.isTrash && (
-            <>
-              <div 
-                className={`image-resize-handle left ${isDragging && dragDirection === 'left' ? 'active' : ''}`}
-                style={{
-                  top: `${handleTop}px`,
-                  left: `${handleLeft}px`,
-                  height: `${handleHeight}px`,
-                  transform: 'translateX(-50%)'
-                }}
-                onMouseDown={(e) => startDrag(e, 'left')}
-              />
-              <div 
-                className={`image-resize-handle right ${isDragging && dragDirection === 'right' ? 'active' : ''}`}
-                style={{
-                  top: `${handleTop}px`,
-                  left: `${handleRight}px`,
-                  height: `${handleHeight}px`,
-                  transform: 'translateX(-50%)'
-                }}
-                onMouseDown={(e) => startDrag(e, 'right')}
-              />
-            </>
-          )}
+
 
           {/* Table Hover Edge Plus Buttons */}
           {activeCell && !note.isTrash && (
@@ -1515,6 +1426,46 @@ export default function Editor({
                 </>
               )}
               
+              <div className="toolbar-divider" style={{ height: '14px', margin: '0 8px' }} />
+              
+              {/* Image resize slider */}
+              <div className="flex-row" style={{ gap: '6px', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Resize:</span>
+                <input 
+                  type="range"
+                  min="60"
+                  max="1000"
+                  value={parseInt(selectedImage.style.width) || selectedImage.clientWidth || 300}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    selectedImage.style.width = `${val}px`;
+                    selectedImage.style.height = 'auto'; // Preserves aspect ratio
+                    handleContentChange();
+                    
+                    // Update floating popup coordinates dynamically
+                    const rect = selectedImage.getBoundingClientRect();
+                    const wrapper = editorRef.current.parentNode.getBoundingClientRect();
+                    const offset = 48;
+                    let topPos = rect.top - wrapper.top - offset;
+                    if (topPos < 55) {
+                      topPos = rect.bottom - wrapper.top + 8;
+                    }
+                    setImagePopupPos({
+                      top: topPos,
+                      left: rect.left - wrapper.left + rect.width / 2
+                    });
+                  }}
+                  style={{
+                    width: '70px',
+                    height: '4px',
+                    borderRadius: '2px',
+                    accentColor: 'var(--accent-color)',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                />
+              </div>
+
               <div className="toolbar-divider" style={{ height: '14px', margin: '0 8px' }} />
               
               <button 

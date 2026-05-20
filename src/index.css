@@ -846,41 +846,7 @@ button {
   animation: fadeIn 0.15s ease-out;
 }
 
-/* Image drag-resize guides */
-.image-resize-handle {
-  position: absolute;
-  width: 24px;
-  z-index: 10;
-  cursor: ew-resize;
-  background-color: transparent;
-  transition: background-color var(--transition-fast);
-}
 
-.image-resize-handle:hover,
-.image-resize-handle.active {
-  background-color: var(--accent-glow);
-}
-
-.image-resize-handle::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 6px;
-  height: 24px;
-  background-color: var(--bg-primary);
-  border: 2px solid var(--accent-color);
-  border-radius: var(--radius-full);
-  box-shadow: var(--shadow-sm);
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.image-resize-handle:hover::after,
-.image-resize-handle.active::after {
-  opacity: 1;
-}
 
 /* Color dot picker controls */
 .color-dot-btn {
