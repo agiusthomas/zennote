@@ -1397,9 +1397,12 @@ export default function Editor({
                     onChange={(e) => {
                       const width = e.target.value;
                       if (width === '0px') {
-                        selectedImage.style.border = 'none';
-                        selectedImage.style.padding = '0';
-                        selectedImage.style.backgroundColor = 'transparent';
+                        selectedImage.style.border = '';
+                        selectedImage.style.borderWidth = '';
+                        selectedImage.style.borderStyle = '';
+                        selectedImage.style.borderColor = '';
+                        selectedImage.style.padding = '';
+                        selectedImage.style.backgroundColor = '';
                       } else {
                         selectedImage.style.borderStyle = 'solid';
                         selectedImage.style.borderWidth = width;

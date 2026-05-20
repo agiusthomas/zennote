@@ -819,7 +819,7 @@ button {
   margin-bottom: 16px;
   cursor: pointer;
   box-sizing: border-box;
-  transition: outline 0.15s ease-in-out, border 0.15s ease-in-out, padding 0.15s ease-in-out;
+  transition: outline 0.15s ease-in-out;
 }
 
 .wysiwyg-editor img:hover {
