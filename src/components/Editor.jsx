@@ -35,7 +35,8 @@ export default function Editor({
   onRestoreNote,
   onDeleteNoteForever,
   onMoveNote,
-  onBackToList
+  onBackToList,
+  isOffline
 }) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
@@ -336,6 +337,10 @@ export default function Editor({
   };
 
   const handleStartEdit = () => {
+    if (isOffline) {
+      alert('You are offline. Note editing is disabled in offline mode.');
+      return;
+    }
     if (!note.draft) {
       onUpdateNote(note.id, {
         draft: {
@@ -1226,8 +1231,9 @@ export default function Editor({
                   <button 
                     className="btn btn-primary" 
                     onClick={handleStartEdit} 
-                    style={{ padding: '6px 12px', fontSize: '13px' }}
-                    title="Edit note"
+                    style={{ padding: '6px 12px', fontSize: '13px', opacity: isOffline ? 0.6 : 1 }}
+                    title={isOffline ? "Editing is disabled in offline mode" : "Edit note"}
+                    disabled={isOffline}
                   >
                     Edit
                   </button>

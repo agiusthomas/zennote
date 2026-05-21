@@ -26,7 +26,10 @@ export default function Sidebar({
   onOpenSearch,
   onCreateFolder,
   onRenameFolder,
-  onDeleteFolder
+  onDeleteFolder,
+  user,
+  onSignOut,
+  isOffline
 }) {
   const [expandedFolders, setExpandedFolders] = useState({});
 
@@ -266,7 +269,56 @@ export default function Sidebar({
             )}
           </ul>
         </div>
-      </div>
+        </div>
+
+      {/* User Session / Auth Footer */}
+      {(user || true) && (
+        <div className="sidebar-user-footer">
+          {user ? (
+            <>
+              <div className="user-profile-info">
+                <div className="user-avatar">
+                  {user.email ? user.email.substring(0, 2).toUpperCase() : 'U'}
+                </div>
+                <div className="user-details">
+                  <span className="user-name">
+                    {user.user_metadata?.full_name || user.email?.split('@')[0]}
+                  </span>
+                  <span className="user-email">{user.email}</span>
+                </div>
+              </div>
+              <div className="sidebar-auth-actions">
+                <button className="signout-btn" onClick={onSignOut} title="Sign Out">
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="user-profile-info">
+                <div className="user-avatar" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                  G
+                </div>
+                <div className="user-details">
+                  <span className="user-name">Guest User</span>
+                  <span className="user-email">Local storage only</span>
+                </div>
+              </div>
+              <div className="sidebar-auth-actions">
+                <button className="signout-btn" onClick={onSignOut} style={{ borderColor: 'var(--accent-color)', color: 'var(--accent-color)' }} title="Sign In">
+                  <span>Sign In (Cloud Sync)</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {isOffline && (
+            <div className="offline-badge">
+              Offline - View Only
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   );
 }
