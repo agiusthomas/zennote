@@ -430,17 +430,31 @@ export default function Editor({
       .then((dataUrl) => {
         executeCommand('insertImage', dataUrl);
         
-        // Auto-set width to 100% and height to auto for newly inserted data images
+        // Auto-set width based on natural width vs container width
         setTimeout(() => {
           if (editorRef.current) {
             const imgs = editorRef.current.querySelectorAll('img[src^="data:image"]');
             imgs.forEach(img => {
               if (!img.style.width) {
-                img.style.width = '100%';
-                img.style.height = 'auto';
+                const applyDimensions = () => {
+                  const naturalWidth = img.naturalWidth;
+                  const editorWidth = editorRef.current.clientWidth - 80; // 80px accounts for editor padding
+                  if (naturalWidth && naturalWidth < editorWidth) {
+                    img.style.width = `${naturalWidth}px`;
+                  } else {
+                    img.style.width = '100%';
+                  }
+                  img.style.height = 'auto';
+                  handleContentChange();
+                };
+
+                if (img.complete) {
+                  applyDimensions();
+                } else {
+                  img.onload = applyDimensions;
+                }
               }
             });
-            handleContentChange();
           }
         }, 50);
       })
@@ -456,11 +470,25 @@ export default function Editor({
               const imgs = editorRef.current.querySelectorAll('img[src^="data:image"]');
               imgs.forEach(img => {
                 if (!img.style.width) {
-                  img.style.width = '100%';
-                  img.style.height = 'auto';
+                  const applyDimensions = () => {
+                    const naturalWidth = img.naturalWidth;
+                    const editorWidth = editorRef.current.clientWidth - 80;
+                    if (naturalWidth && naturalWidth < editorWidth) {
+                      img.style.width = `${naturalWidth}px`;
+                    } else {
+                      img.style.width = '100%';
+                    }
+                    img.style.height = 'auto';
+                    handleContentChange();
+                  };
+
+                  if (img.complete) {
+                    applyDimensions();
+                  } else {
+                    img.onload = applyDimensions;
+                  }
                 }
               });
-              handleContentChange();
             }
           }, 50);
         };
