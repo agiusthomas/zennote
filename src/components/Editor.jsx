@@ -177,6 +177,38 @@ export default function Editor({
     };
   }, []);
 
+  // Global keydown listener to delete selected image with Backspace / Delete keys
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if (!selectedImage || !isEditing || note.isTrash) return;
+
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        // Prevent deleting if the user is typing in a form input, textarea, or similar
+        const activeEl = document.activeElement;
+        if (activeEl && (
+          activeEl.tagName === 'INPUT' || 
+          activeEl.tagName === 'TEXTAREA' || 
+          activeEl.closest('.emoji-picker-popover') || 
+          activeEl.closest('.tag-input') || 
+          activeEl.closest('.table-context-menu')
+        )) {
+          return;
+        }
+
+        e.preventDefault();
+        selectedImage.remove();
+        setSelectedImage(null);
+        setShowBorderControls(false);
+        handleContentChange();
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [selectedImage, isEditing, note?.isTrash]);
+
   // Listen for selection changes to set active table cell
   useEffect(() => {
     const handleSelectionChange = () => {
