@@ -25,7 +25,7 @@ import {
   Heading,
   ChevronLeft
 } from 'lucide-react';
-import { getFolderBreadcrumbs } from '../utils/helpers';
+import { getFolderBreadcrumbs, optimizeImage } from '../utils/helpers';
 import EmojiPicker from './EmojiPicker';
 
 export default function Editor({
@@ -426,26 +426,46 @@ export default function Editor({
 
   // Image Upload and Paste Helpers
   const insertImageFile = (file) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target.result;
-      executeCommand('insertImage', dataUrl);
-      
-      // Auto-set width to 100% and height to auto for newly inserted data images
-      setTimeout(() => {
-        if (editorRef.current) {
-          const imgs = editorRef.current.querySelectorAll('img[src^="data:image"]');
-          imgs.forEach(img => {
-            if (!img.style.width) {
-              img.style.width = '100%';
-              img.style.height = 'auto';
+    optimizeImage(file)
+      .then((dataUrl) => {
+        executeCommand('insertImage', dataUrl);
+        
+        // Auto-set width to 100% and height to auto for newly inserted data images
+        setTimeout(() => {
+          if (editorRef.current) {
+            const imgs = editorRef.current.querySelectorAll('img[src^="data:image"]');
+            imgs.forEach(img => {
+              if (!img.style.width) {
+                img.style.width = '100%';
+                img.style.height = 'auto';
+              }
+            });
+            handleContentChange();
+          }
+        }, 50);
+      })
+      .catch((err) => {
+        console.error('Failed to optimize image, falling back to original:', err);
+        // Fallback to loading original file directly if optimization fails
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target.result;
+          executeCommand('insertImage', dataUrl);
+          setTimeout(() => {
+            if (editorRef.current) {
+              const imgs = editorRef.current.querySelectorAll('img[src^="data:image"]');
+              imgs.forEach(img => {
+                if (!img.style.width) {
+                  img.style.width = '100%';
+                  img.style.height = 'auto';
+                }
+              });
+              handleContentChange();
             }
-          });
-          handleContentChange();
-        }
-      }, 50);
-    };
-    reader.readAsDataURL(file);
+          }, 50);
+        };
+        reader.readAsDataURL(file);
+      });
   };
 
   const handleImageUpload = (e) => {
