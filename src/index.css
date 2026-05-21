@@ -1838,3 +1838,34 @@ button {
   color: var(--accent-color);
   font-weight: 500;
 }
+
+.more-actions-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition-fast);
+}
+
+.more-actions-item:hover {
+  background-color: var(--bg-secondary);
+}
+
+.folder-select-modal-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 4px;
+  margin-top: 10px;
+}
+

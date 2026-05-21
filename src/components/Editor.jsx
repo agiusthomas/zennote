@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { getFolderBreadcrumbs, optimizeImage } from '../utils/helpers';
 import EmojiPicker from './EmojiPicker';
+import { Modal } from './Modal';
 
 export default function Editor({
   note,
@@ -50,6 +51,7 @@ export default function Editor({
   const [lastBorderWidth, setLastBorderWidth] = useState('2px');
   const [lastBorderColor, setLastBorderColor] = useState('var(--border-color)');
   const [showFolderDropdown, setShowFolderDropdown] = useState(false);
+  const [showFolderModal, setShowFolderModal] = useState(false);
 
   // Table creator state variables
   const [showTableCreator, setShowTableCreator] = useState(false);
@@ -1352,46 +1354,17 @@ export default function Editor({
                 
                 {showFolderDropdown && (
                   <div className="editor-more-actions-dropdown">
-                    <div className="dropdown-section-title">Move to Folder</div>
                     <button
                       type="button"
-                      className={`folder-mover-item ${!activeFolderId ? 'selected' : ''}`}
+                      className="more-actions-item"
                       onClick={() => {
-                        const fId = null;
-                        if (isEditing) {
-                          updateDraft({ folderId: fId });
-                        } else {
-                          onMoveNote(note.id, fId);
-                        }
+                        setShowFolderModal(true);
                         setShowFolderDropdown(false);
                       }}
                     >
-                      <Folder size={14} style={{ opacity: 0.6 }} />
-                      <span>Move to Root</span>
+                      <Folder size={16} />
+                      <span>Move to Folder...</span>
                     </button>
-                    {getIndentedFolders().map(f => {
-                      const isSelected = activeFolderId === f.id;
-                      return (
-                        <button
-                          key={f.id}
-                          type="button"
-                          className={`folder-mover-item ${isSelected ? 'selected' : ''}`}
-                          style={{ paddingLeft: `${10 + f.depth * 12}px` }}
-                          onClick={() => {
-                            const fId = f.id;
-                            if (isEditing) {
-                              updateDraft({ folderId: fId });
-                            } else {
-                              onMoveNote(note.id, fId);
-                            }
-                            setShowFolderDropdown(false);
-                          }}
-                        >
-                          <Folder size={14} style={{ opacity: 0.6 }} />
-                          <span>{f.name}</span>
-                        </button>
-                      );
-                    })}
                   </div>
                 )}
               </div>
@@ -1920,6 +1893,64 @@ export default function Editor({
           )}
         </div>
       </div>
+
+      {/* Folder Selection Modal */}
+      <Modal
+        isOpen={showFolderModal}
+        onClose={() => setShowFolderModal(false)}
+        title="Move Note to Folder"
+      >
+        <div className="folder-select-modal-list">
+          <button
+            type="button"
+            className={`folder-mover-item ${!activeFolderId ? 'selected' : ''}`}
+            onClick={() => {
+              const fId = null;
+              if (isEditing) {
+                updateDraft({ folderId: fId });
+              } else {
+                onMoveNote(note.id, fId);
+              }
+              setShowFolderModal(false);
+            }}
+          >
+            <Folder size={14} style={{ opacity: 0.6 }} />
+            <span>Move to Root</span>
+          </button>
+          {getIndentedFolders().map(f => {
+            const isSelected = activeFolderId === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                className={`folder-mover-item ${isSelected ? 'selected' : ''}`}
+                style={{ paddingLeft: `${10 + f.depth * 12}px` }}
+                onClick={() => {
+                  const fId = f.id;
+                  if (isEditing) {
+                    updateDraft({ folderId: fId });
+                  } else {
+                    onMoveNote(note.id, fId);
+                  }
+                  setShowFolderModal(false);
+                }}
+              >
+                <Folder size={14} style={{ opacity: 0.6 }} />
+                <span>{f.name}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setShowFolderModal(false)}
+          >
+            Close
+          </button>
+        </div>
+      </Modal>
 
       {/* Stats Footer */}
       <div style={{
